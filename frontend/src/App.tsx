@@ -1,0 +1,244 @@
+import { useEffect, useState } from "react";
+import { getTerms, postCourses, postGenerate } from "./api";
+import type { Bundle, GenerateResponse, Preferences, Term } from "./types";
+import TermDropdown from "./components/TermDropdown";
+import CourseChipInput from "./components/CourseChipInput";
+import TimeRangeSlider from "./components/TimeRangeSlider";
+import GapControl from "./components/GapControl";
+import LockedConstraintPills from "./components/LockedConstraintPills";
+import CalendarGrid from "./components/CalendarGrid";
+import ScheduleTabs from "./components/ScheduleTabs";
+import ScheduleStats from "./components/ScheduleStats";
+import PreferencesBar from "./components/PreferencesBar";
+import MessageBanner from "./components/MessageBanner";
+import UnschedulableBadges from "./components/UnschedulableBadges";
+
+function App() {
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [selectedTermCode, setSelectedTermCode] = useState("");
+  const [termsLoading, setTermsLoading] = useState(true);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const [courseCodes, setCourseCodes] = useState<string[]>([]);
+  const [preferences, setPreferences] = useState<Preferences>({
+    startTime: "09:00",
+    endTime: "17:00",
+    gapPreference: "minimize",
+  });
+  // Held so preference changes on the results view can re-call postGenerate
+  // without re-fetching from UCR — only re-fetched when courses/term change.
+  const [courseBundles, setCourseBundles] = useState<Record<string, Bundle[]> | null>(null);
+  const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [step, setStep] = useState<"setup" | "results">("setup");
+  const [generateLoading, setGenerateLoading] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Fetch the live term list once, when the app first loads.
+  useEffect(() => {
+    getTerms()
+      .then((fetchedTerms) => {
+        // Term codes are "YYYY" + a 2-digit term indicator (e.g. "202540" =
+        // Fall 2025) — older terms are still returned by UCR but aren't
+        // useful for planning a future schedule, so we only show 2025+.
+        const recentTerms = fetchedTerms.filter((term) => Number(term.code.slice(0, 4)) >= 2025);
+        setTerms(recentTerms);
+        setSelectedTermCode(recentTerms[0]?.code ?? "");
+      })
+      .catch(() => setTermsError("Couldn't load terms from UCR. Is the backend running?"))
+      .finally(() => setTermsLoading(false));
+  }, []);
+
+  // Runs the full pipeline from the setup card: fetch section data from
+  // UCR (via our backend), then run the scheduler against it. Both calls
+  // happen here because this is the first time we're generating for this
+  // exact set of courses/term.
+  function handleGenerate() {
+    setGenerateLoading(true);
+    setGenerateError(null);
+    postCourses(courseCodes, selectedTermCode)
+      .then((bundles) => {
+        setCourseBundles(bundles);
+        return postGenerate(bundles, preferences);
+      })
+      .then((result) => {
+        setGenerateResult(result);
+        setActiveTab(0); // a fresh result means the old tab index may no longer exist
+        setStep("results");
+      })
+      .catch((err: Error) => setGenerateError(err.message))
+      .finally(() => setGenerateLoading(false));
+  }
+
+  // Called from the results view's PreferencesBar. Deliberately skips
+  // postCourses entirely — the already-fetched courseBundles are reused, so
+  // tweaking the time range or gap preference never re-hits UCR.
+  function handlePreferencesChangeOnResults(newPreferences: Preferences) {
+    setPreferences(newPreferences);
+    if (!courseBundles) return;
+
+    setGenerateLoading(true);
+    setGenerateError(null);
+    postGenerate(courseBundles, newPreferences)
+      .then((result) => {
+        setGenerateResult(result);
+        setActiveTab(0);
+      })
+      .catch((err: Error) => setGenerateError(err.message))
+      .finally(() => setGenerateLoading(false));
+  }
+
+  // Called from the "Refresh seat counts" button on the results view. Bypasses
+  // the seat cache entirely (forceRefresh) so a student watching seats open
+  // up during registration rush hour gets truly live numbers, not whatever
+  // was cached up to 3 minutes ago.
+  function handleRefreshSeats() {
+    setGenerateLoading(true);
+    setGenerateError(null);
+    postCourses(courseCodes, selectedTermCode, true)
+      .then((bundles) => {
+        setCourseBundles(bundles);
+        return postGenerate(bundles, preferences);
+      })
+      .then((result) => {
+        setGenerateResult(result);
+        setActiveTab(0);
+      })
+      .catch((err: Error) => setGenerateError(err.message))
+      .finally(() => setGenerateLoading(false));
+  }
+
+  const canGenerate = courseCodes.length > 0 && selectedTermCode !== "" && !generateLoading;
+  const activeSchedule = generateResult?.schedules[activeTab];
+  // If not a single returned schedule fits the preferred time window, treat
+  // it the same as "no schedule found" — showing a calendar full of classes
+  // outside the window the user actually asked for isn't a real answer.
+  const anyFitsTimeRange = generateResult?.schedules.some((s) => s.fitsTimeRange) ?? false;
+  const showCalendar = Boolean(activeSchedule) && anyFitsTimeRange;
+
+  return (
+    <div className="min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-6">
+      {step === "setup" && (
+        <div className="animate-fade-in w-full max-w-sm rounded-2xl border border-white/40 bg-white/60 p-6 shadow-lg backdrop-blur-md ring-1 ring-black/5">
+          <h1 className="text-2xl font-semibold text-primary-700 tracking-tight">RSchedule</h1>
+
+          <div className="mt-4">
+            <TermDropdown
+              terms={terms}
+              selectedTermCode={selectedTermCode}
+              onChange={setSelectedTermCode}
+              loading={termsLoading}
+              error={termsError}
+            />
+          </div>
+
+          <div className="mt-4">
+            <CourseChipInput courseCodes={courseCodes} onChange={setCourseCodes} />
+          </div>
+
+          <div className="mt-5">
+            <TimeRangeSlider
+              startTime={preferences.startTime}
+              endTime={preferences.endTime}
+              onChange={(startTime, endTime) =>
+                setPreferences((prev) => ({ ...prev, startTime, endTime }))
+              }
+            />
+          </div>
+
+          <div className="mt-5">
+            <GapControl
+              value={preferences.gapPreference}
+              onChange={(gapPreference) => setPreferences((prev) => ({ ...prev, gapPreference }))}
+            />
+          </div>
+
+          <div className="mt-5">
+            <LockedConstraintPills />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+            className="mt-6 w-full cursor-pointer rounded-xl bg-accent-500 px-4 py-2.5 font-semibold text-primary-900
+                       transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {generateLoading ? "Generating…" : "Generate"}
+          </button>
+
+          {generateError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {generateError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === "results" && generateResult && (
+        <div className="animate-fade-in w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-6 shadow-lg backdrop-blur-md ring-1 ring-black/5">
+          <div className="mb-4 flex items-center justify-between">
+            <h1 className="text-xl font-semibold text-primary-700 tracking-tight">RSchedule</h1>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={handleRefreshSeats}
+                disabled={generateLoading}
+                className="cursor-pointer text-sm font-medium text-primary-700 hover:underline
+                           disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("setup")}
+                className="cursor-pointer text-sm font-medium text-primary-700 hover:underline"
+              >
+                ← Edit courses
+              </button>
+            </div>
+          </div>
+
+          {generateError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {generateError}
+            </div>
+          )}
+
+          <div className="mb-4 flex flex-col gap-3">
+            <MessageBanner message={generateResult.message} />
+            <UnschedulableBadges courses={generateResult.unschedulableCourses} />
+          </div>
+
+          {/* The preferences bar stays visible even with zero schedules —
+              if the problem is "nothing fits your time range," adjusting it
+              right here is the actual fix, not just decoration. */}
+          <PreferencesBar preferences={preferences} onChange={handlePreferencesChangeOnResults} />
+
+          {showCalendar && activeSchedule ? (
+            <>
+              <div className="mt-4">
+                <ScheduleTabs
+                  schedules={generateResult.schedules}
+                  activeTab={activeTab}
+                  onChange={setActiveTab}
+                />
+              </div>
+
+              <div className="my-4">
+                <ScheduleStats schedule={activeSchedule} />
+              </div>
+
+              <CalendarGrid selections={activeSchedule.selections} />
+            </>
+          ) : (
+            <p className="mt-6 text-center text-sm text-neutral-500">
+              No schedule could be generated — see the details above.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;

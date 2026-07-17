@@ -1,19 +1,30 @@
 import "dotenv/config";
 import express from "express";
 import { getCourseBundles } from "./services/courseService.js";
+import { fetchTerms } from "./services/ucrClient.js";
 import { CandidateSchedule, Bundle } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
 
 const app = express();
 app.use(express.json());
 
+app.get("/terms", async (_req, res) => {
+  try {
+    res.json(await fetchTerms());
+  } catch (err) {
+    console.error("Failed to fetch terms from UCR:", err);
+    res.status(502).json({ error: "Failed to load terms from UCR. Please try again shortly." });
+  }
+});
+
 interface CoursesRequestBody {
   courseCodes: string[];
   termCode: string;
+  forceRefresh?: boolean;
 }
 
 app.post("/courses", async (req, res) => {
-  const { courseCodes, termCode } = req.body as CoursesRequestBody;
+  const { courseCodes, termCode, forceRefresh } = req.body as CoursesRequestBody;
 
   if (!Array.isArray(courseCodes) || courseCodes.length === 0 || !termCode) {
     res.status(400).json({ error: "courseCodes (non-empty array) and termCode are required" });
@@ -24,7 +35,7 @@ app.post("/courses", async (req, res) => {
     const results = await Promise.all(
       courseCodes.map(async (courseCode) => ({
         courseCode,
-        bundles: await getCourseBundles(courseCode, termCode),
+        bundles: await getCourseBundles(courseCode, termCode, forceRefresh),
       })),
     );
 
@@ -83,7 +94,7 @@ app.post("/generate", (req, res) => {
         "No conflict-free schedule is possible — these courses' meeting times don't leave any way to avoid overlaps.";
     }
   } else if (!result.anyFitsTimeRange) {
-    message = "No schedule fits your preferred time range. Showing the best available alternatives instead.";
+    message = "No schedule fits your preferred time range. Try widening it to see available options.";
   }
 
   res.json({

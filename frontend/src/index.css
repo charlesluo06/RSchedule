@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+
+/*
+  Tailwind v4 reads design tokens from this @theme block and turns them into
+  real utility classes automatically — e.g. --color-primary-500 becomes usable
+  as `bg-primary-500`, `text-primary-500`, `border-primary-500`, etc. This is
+  the one place our brand colors and font are defined; everywhere else in the
+  app just references the generated utility classes.
+*/
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  /* UCR navy — the primary brand color, used for headings and main UI chrome. */
+  --color-primary-50: #eaf1fb;
+  --color-primary-100: #d3e0f5;
+  --color-primary-500: #003da5;
+  --color-primary-700: #002e5d;
+  --color-primary-900: #001b38;
+
+  /* UCR gold — the accent color, used sparingly for emphasis (buttons, highlights). */
+  --color-accent-400: #ffd166;
+  --color-accent-500: #ffb81c;
+  --color-accent-600: #e09e00;
+
+  /* A warm-neutral scale (not pure grey) so the light theme feels considered
+     rather than default. */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-500: #64748b;
+  --color-neutral-700: #334155;
+  --color-neutral-900: #0f172a;
+}
+
+/*
+  Styling for the dual-handle time-range slider (TimeRangeSlider.tsx). Two
+  <input type="range"> elements are stacked exactly on top of each other; by
+  default the whole track of each is clickable, which would make them fight
+  over clicks. Making the track invisible/unclickable and only the round
+  thumb clickable is what makes two overlapping sliders feel like one
+  cohesive dual-handle control.
+*/
+input[type="range"].range-thumb {
+  pointer-events: none; /* the track itself never intercepts clicks */
+}
+
+input[type="range"].range-thumb::-webkit-slider-runnable-track,
+input[type="range"].range-thumb::-moz-range-track {
+  background: transparent;
+}
+
+input[type="range"].range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto; /* only the thumb itself is clickable/draggable */
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--color-primary-500);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+input[type="range"].range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--color-primary-500);
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+/* A subtle, tasteful entrance for the setup/results cards whenever they
+   mount (e.g. switching steps, or a fresh /generate result landing) —
+   overridden to be instant below when the user prefers reduced motion. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in-up 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

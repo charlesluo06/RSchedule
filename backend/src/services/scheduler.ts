@@ -114,7 +114,11 @@ export interface GenerateResult {
   unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[];
 }
 
-export type GapPreference = "minimize" | "maximize";
+// "minimize" prefers tightly-packed schedules, "maximize" prefers spread-out
+// ones, and "none" means the user doesn't care about gaps at all — so we skip
+// gap comparison entirely and rank purely by whether the schedule fits the
+// preferred time window.
+export type GapPreference = "minimize" | "maximize" | "none";
 
 // A bundle is only actually registerable if every section in it (lecture,
 // discussion, lab) still has an open seat — one full component makes the
@@ -156,7 +160,9 @@ export function generateSchedules(
     };
   });
 
-  const gapSign = gapPreference === "minimize" ? 1 : -1;
+  // gapSign of 0 (for "none") makes the gap term drop out, so schedules are
+  // ordered only by whether they fit the time window.
+  const gapSign = gapPreference === "minimize" ? 1 : gapPreference === "maximize" ? -1 : 0;
   scored.sort((a, b) => {
     if (a.fitsTimeRange !== b.fitsTimeRange) return a.fitsTimeRange ? -1 : 1;
     return gapSign * (a.gapMinutes - b.gapMinutes);

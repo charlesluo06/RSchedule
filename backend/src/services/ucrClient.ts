@@ -66,6 +66,32 @@ async function establishSession(termCode: string): Promise<CookieJar> {
   return jar;
 }
 
+export interface Term {
+  code: string; // numeric term code, e.g. "202540" — what /courses expects
+  description: string; // human label, e.g. "Fall 2025"
+}
+
+/**
+ * Fetches UCR's list of available terms. Only needs the first handshake step
+ * (pick up a session cookie) — not the full term-selection dance — because
+ * getTerms doesn't depend on a term already being chosen.
+ */
+export async function fetchTerms(): Promise<Term[]> {
+  const jar = new CookieJar();
+  const headers = { "User-Agent": "Mozilla/5.0" };
+
+  const step1 = await fetch(`${BASE}/term/termSelection?mode=search`, { headers });
+  jar.absorb(step1);
+
+  const response = await fetch(`${BASE}/classSearch/getTerms?searchTerm=&offset=1&max=25`, {
+    headers: { ...headers, Cookie: jar.header() },
+  });
+  if (!response.ok) {
+    throw new Error(`UCR getTerms failed with status ${response.status}`);
+  }
+  return (await response.json()) as Term[];
+}
+
 interface RawMeetingTime {
   beginTime: string; // "HHMM", e.g. "1000"
   endTime: string;
@@ -84,6 +110,7 @@ interface RawSection {
   scheduleTypeDescription: string;
   linkIdentifier: string | null;
   seatsAvailable: number;
+  maximumEnrollment: number;
   faculty: { displayName: string; primaryIndicator: boolean }[];
   meetingsFaculty: { meetingTime: RawMeetingTime }[];
 }
@@ -121,6 +148,7 @@ function normalizeSection(raw: RawSection): Section {
     linkId: raw.linkIdentifier,
     meetings,
     seatsAvailable: raw.seatsAvailable,
+    maximumEnrollment: raw.maximumEnrollment,
     instructor: primaryFaculty?.displayName ?? "Staff",
   };
 }

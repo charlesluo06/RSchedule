@@ -17,6 +17,7 @@ export interface Section {
   linkId: string | null;
   meetings: Meeting[];
   seatsAvailable: number;
+  maximumEnrollment: number;
   instructor: string;
 }
 

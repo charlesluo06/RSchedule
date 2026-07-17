@@ -8,7 +8,7 @@ export const SLIDER_STEP_MIN = 30;
 
 // Pixels representing one hour of calendar height — taller rows for the
 // "airy & spacious" density we're going for.
-export const HOUR_PX = 64;
+export const HOUR_PX = 76;
 
 export const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 
@@ -38,6 +38,32 @@ export function formatDuration(totalMinutes: number): string {
   if (hours === 0) return `${mins}m`;
   if (mins === 0) return `${hours}h`;
   return `${hours}h ${mins}m`;
+}
+
+// The calendar shouldn't waste vertical space showing hours the user never
+// asked for (e.g. 7am when they only want 9am+) — but it also can't clip off
+// a real class that happens to fall outside the preferred window (a schedule
+// can still be shown with fitsTimeRange:false). So the visible window is the
+// UNION of the preference range and the actual meeting times, then rounded
+// out to clean hour boundaries so the axis labels land on the hour.
+export function computeVisibleWindow(
+  startTime: string,
+  endTime: string,
+  selections: Record<string, Bundle>,
+): { startMin: number; endMin: number } {
+  const meetings = Object.values(selections)
+    .flatMap((bundle) => bundle.sections)
+    .flatMap((section) => section.meetings);
+
+  const prefStart = timeStringToMinutes(startTime);
+  const prefEnd = timeStringToMinutes(endTime);
+  const rawStart = Math.min(prefStart, ...meetings.map((m) => timeStringToMinutes(m.startTime)));
+  const rawEnd = Math.max(prefEnd, ...meetings.map((m) => timeStringToMinutes(m.endTime)));
+
+  return {
+    startMin: Math.floor(rawStart / 60) * 60,
+    endMin: Math.ceil(rawEnd / 60) * 60,
+  };
 }
 
 // The earliest class start time across a whole schedule. Sections with no

@@ -175,7 +175,10 @@ function App() {
       )}
 
       {step === "results" && generateResult && (
-        <div className="animate-fade-in w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-6 shadow-lg backdrop-blur-md ring-1 ring-black/5">
+        <div
+          className="animate-fade-in w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-6 shadow-lg
+                     backdrop-blur-md ring-1 ring-black/5"
+        >
           <div className="mb-4 flex items-center justify-between">
             <h1 className="text-xl font-semibold text-primary-700 tracking-tight">RSchedule</h1>
             <div className="flex items-center gap-4">
@@ -209,28 +212,37 @@ function App() {
             <UnschedulableBadges courses={generateResult.unschedulableCourses} />
           </div>
 
-          {/* The preferences bar stays visible even with zero schedules —
-              if the problem is "nothing fits your time range," adjusting it
-              right here is the actual fix, not just decoration. */}
+          {/* Scrolls away with the page — only the option tabs below need to
+              stay put once you're deep into the calendar. */}
           <PreferencesBar preferences={preferences} onChange={handlePreferencesChangeOnResults} />
 
-          {showCalendar && activeSchedule ? (
+          {showCalendar && activeSchedule && (
             <>
-              <div className="mt-4">
+              {/* Sticky so switching options or checking stats is still
+                  possible without scrolling back up past the calendar.
+                  Fully opaque (not translucent like the card) and extended
+                  edge-to-edge via negative margin — a stuck header shouldn't
+                  look like a floating rounded card with content ghosting
+                  through it; a solid bar with a clean bottom border reads
+                  as "pinned" instead of "awkwardly overlapping." */}
+              <div className="sticky top-0 z-10 -mx-6 mt-4 border-b border-neutral-200 bg-white px-6 py-3 shadow-sm">
                 <ScheduleTabs
                   schedules={generateResult.schedules}
                   activeTab={activeTab}
                   onChange={setActiveTab}
                 />
+                <div className="mt-3">
+                  <ScheduleStats schedule={activeSchedule} />
+                </div>
               </div>
 
-              <div className="my-4">
-                <ScheduleStats schedule={activeSchedule} />
+              <div className="mt-4">
+                <CalendarGrid selections={activeSchedule.selections} preferences={preferences} />
               </div>
-
-              <CalendarGrid selections={activeSchedule.selections} />
             </>
-          ) : (
+          )}
+
+          {!(showCalendar && activeSchedule) && (
             <p className="mt-6 text-center text-sm text-neutral-500">
               No schedule could be generated — see the details above.
             </p>

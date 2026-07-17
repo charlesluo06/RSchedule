@@ -127,6 +127,23 @@ function hasOpenSeats(bundle: Bundle): boolean {
   return bundle.sections.every((section) => section.seatsAvailable > 0);
 }
 
+// UCR's own linked-sections data occasionally lists a lecture/discussion/lab
+// combination as officially registerable even though two of its own pieces
+// overlap in time (confirmed against Banner's getLinkedSections directly —
+// this isn't a bug in our linking logic, it's real UCR data). Our app's
+// core promise is "no overlapping classes," so a bundle that conflicts with
+// itself is never usable, regardless of what UCR's registration portal
+// would technically let a student attempt to register for.
+function hasNoInternalConflict(bundle: Bundle): boolean {
+  const meetings = bundle.sections.flatMap((section) => section.meetings);
+  for (let i = 0; i < meetings.length; i++) {
+    for (let j = i + 1; j < meetings.length; j++) {
+      if (meetingsOverlap(meetings[i], meetings[j])) return false;
+    }
+  }
+  return true;
+}
+
 export function generateSchedules(
   courseBundles: Record<string, Bundle[]>,
   preference: TimeRangePreference,
@@ -145,7 +162,10 @@ export function generateSchedules(
   // Most-constrained-first: courses with fewer options get tried first,
   // so branches that will fail get pruned as early as possible.
   const courseOrder = Object.entries(courseBundles)
-    .map(([courseCode, bundles]) => ({ courseCode, bundles: bundles.filter(hasOpenSeats) }))
+    .map(([courseCode, bundles]) => ({
+      courseCode,
+      bundles: bundles.filter((b) => hasOpenSeats(b) && hasNoInternalConflict(b)),
+    }))
     .sort((a, b) => a.bundles.length - b.bundles.length);
 
   const rawResults: Map<string, Bundle>[] = [];

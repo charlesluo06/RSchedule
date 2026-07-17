@@ -6,7 +6,12 @@ import { CandidateSchedule, Bundle } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
 
 const app = express();
-app.use(express.json());
+// Express's default JSON body limit is 100kb — fine for /courses (a small
+// request), but /generate's request body embeds the full courseBundles data
+// the client already fetched, and a course with many discussion/lab options
+// (e.g. STAT010, ~166kb of bundle data) can exceed that easily since each
+// bundle repeats full section objects across every combination.
+app.use(express.json({ limit: "5mb" }));
 
 app.get("/terms", async (_req, res) => {
   try {

@@ -1,13 +1,14 @@
 import { useState } from "react";
-import type { Bundle, Section } from "../types";
+import type { Bundle, Preferences, Section } from "../types";
 import { courseColorForIndex, type CourseColor } from "../lib/colors";
-import { DAY_END_MIN, DAY_ORDER, DAY_START_MIN, HOUR_PX, timeStringToMinutes } from "../lib/time";
+import { DAY_ORDER, HOUR_PX, computeVisibleWindow, timeStringToMinutes } from "../lib/time";
 import CalendarBlock from "./CalendarBlock";
 import ArrangedNote from "./ArrangedNote";
 import ClassDetailModal from "./ClassDetailModal";
 
 interface CalendarGridProps {
   selections: Record<string, Bundle>;
+  preferences: Preferences;
 }
 
 interface SelectedSection {
@@ -16,7 +17,7 @@ interface SelectedSection {
   color: CourseColor;
 }
 
-function CalendarGrid({ selections }: CalendarGridProps) {
+function CalendarGrid({ selections, preferences }: CalendarGridProps) {
   const [selectedSection, setSelectedSection] = useState<SelectedSection | null>(null);
 
   // Sorting course codes first (rather than using object key order, which
@@ -24,8 +25,12 @@ function CalendarGrid({ selections }: CalendarGridProps) {
   // grid re-renders, even across different tabs/schedules.
   const sortedCourseCodes = Object.keys(selections).sort();
 
-  const totalHeight = ((DAY_END_MIN - DAY_START_MIN) / 60) * HOUR_PX;
-  const hours = Array.from({ length: (DAY_END_MIN - DAY_START_MIN) / 60 + 1 }, (_, i) => 7 + i);
+  // Only show the hours actually relevant to this schedule/preference,
+  // instead of always rendering the full 7am-10pm slider range.
+  const { startMin, endMin } = computeVisibleWindow(preferences.startTime, preferences.endTime, selections);
+  const startHour = startMin / 60;
+  const totalHeight = ((endMin - startMin) / 60) * HOUR_PX;
+  const hours = Array.from({ length: (endMin - startMin) / 60 + 1 }, (_, i) => startHour + i);
 
   // A section with no meetings has no day or time to be positioned by, so it
   // can never appear as a block — collected here in one clean pass, separate
@@ -45,7 +50,7 @@ function CalendarGrid({ selections }: CalendarGridProps) {
             <span
               key={h}
               className="absolute right-1 -translate-y-1/2 text-xs text-neutral-500 tabular-nums"
-              style={{ top: (h - 7) * HOUR_PX }}
+              style={{ top: (h - startHour) * HOUR_PX }}
             >
               {h <= 12 ? `${h}${h === 12 ? "pm" : "am"}` : `${h - 12}pm`}
             </span>
@@ -63,7 +68,7 @@ function CalendarGrid({ selections }: CalendarGridProps) {
                 <div
                   key={h}
                   className="absolute inset-x-0 border-t border-neutral-100"
-                  style={{ top: (h - 7) * HOUR_PX }}
+                  style={{ top: (h - startHour) * HOUR_PX }}
                 />
               ))}
 
@@ -75,13 +80,13 @@ function CalendarGrid({ selections }: CalendarGridProps) {
                   section.meetings
                     .filter((meeting) => meeting.day === day)
                     .map((meeting) => {
-                      const startMin = timeStringToMinutes(meeting.startTime) - DAY_START_MIN;
-                      const endMin = timeStringToMinutes(meeting.endTime) - DAY_START_MIN;
+                      const meetingStartMin = timeStringToMinutes(meeting.startTime) - startMin;
+                      const meetingEndMin = timeStringToMinutes(meeting.endTime) - startMin;
                       return (
                         <CalendarBlock
                           key={`${section.crn}-${day}`}
-                          top={(startMin / 60) * HOUR_PX}
-                          height={((endMin - startMin) / 60) * HOUR_PX}
+                          top={(meetingStartMin / 60) * HOUR_PX}
+                          height={((meetingEndMin - meetingStartMin) / 60) * HOUR_PX}
                           color={color}
                           courseCode={courseCode}
                           sectionType={section.sectionType}
@@ -89,6 +94,7 @@ function CalendarGrid({ selections }: CalendarGridProps) {
                           room={`${meeting.building} ${meeting.room}`}
                           startTime={meeting.startTime}
                           endTime={meeting.endTime}
+                          seatsAvailable={section.seatsAvailable}
                           onClick={() => setSelectedSection({ courseCode, section, color })}
                         />
                       );

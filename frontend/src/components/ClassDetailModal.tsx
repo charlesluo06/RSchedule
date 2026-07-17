@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Section } from "../types";
 import type { CourseColor } from "../lib/colors";
 import { formatClock } from "../lib/time";
@@ -21,14 +22,38 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  return (
+  // Lock page scroll while the modal is open — otherwise the calendar
+  // underneath keeps scrolling behind an overlay that's supposed to demand
+  // full attention. Locking both <html> and <body> since which one actually
+  // owns the scrollbar depends on the page's layout, and getting only one
+  // of them leaves scrolling still possible. Restored on close/unmount.
+  useEffect(() => {
+    const html = document.documentElement;
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, []);
+
+  // Rendered via a portal straight into <body> — the results card has
+  // backdrop-blur-md on it, and CSS backdrop-filter on an ancestor creates a
+  // new containing block for `position: fixed` descendants. Without the
+  // portal, "fixed inset-0" would center itself relative to the card's full
+  // scrollable height (which can be taller than the viewport) instead of
+  // the viewport you're actually looking at — exactly the "centered in the
+  // whole calendar, not where I'm scrolled to" bug this fixes.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-white/30 p-4 backdrop-blur-[2px]"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="animate-fade-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+        className="animate-fade-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -89,7 +114,8 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
           </div>
         </dl>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

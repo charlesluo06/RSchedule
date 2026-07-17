@@ -8,7 +8,6 @@ interface GapControlProps {
 const OPTIONS: { value: GapPreference; label: string }[] = [
   { value: "minimize", label: "Packed" },
   { value: "none", label: "Any" },
-  { value: "maximize", label: "Spread" },
 ];
 
 function GapControl({ value, onChange }: GapControlProps) {

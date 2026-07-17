@@ -102,21 +102,46 @@ function scheduleKey(selections: Map<string, Bundle>): string {
     .join(",");
 }
 
+export type UnschedulableReason = "not-offered" | "all-full";
+
 export interface GenerateResult {
   schedules: CandidateSchedule[];
   anyValidSchedule: boolean;
   anyFitsTimeRange: boolean;
+  // Courses that were impossible to schedule for a reason we can pin down
+  // before even running the search — as opposed to a genuine time conflict,
+  // which only shows up after trying every combination.
+  unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[];
+}
+
+export type GapPreference = "minimize" | "maximize";
+
+// A bundle is only actually registerable if every section in it (lecture,
+// discussion, lab) still has an open seat — one full component makes the
+// whole combination unusable, even if the other components are open.
+function hasOpenSeats(bundle: Bundle): boolean {
+  return bundle.sections.every((section) => section.seatsAvailable > 0);
 }
 
 export function generateSchedules(
   courseBundles: Record<string, Bundle[]>,
   preference: TimeRangePreference,
+  gapPreference: GapPreference = "minimize",
   maxResults = 3,
 ): GenerateResult {
+  const unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[] = [];
+  for (const [courseCode, bundles] of Object.entries(courseBundles)) {
+    if (bundles.length === 0) {
+      unschedulableCourses.push({ courseCode, reason: "not-offered" });
+    } else if (!bundles.some(hasOpenSeats)) {
+      unschedulableCourses.push({ courseCode, reason: "all-full" });
+    }
+  }
+
   // Most-constrained-first: courses with fewer options get tried first,
   // so branches that will fail get pruned as early as possible.
   const courseOrder = Object.entries(courseBundles)
-    .map(([courseCode, bundles]) => ({ courseCode, bundles }))
+    .map(([courseCode, bundles]) => ({ courseCode, bundles: bundles.filter(hasOpenSeats) }))
     .sort((a, b) => a.bundles.length - b.bundles.length);
 
   const rawResults: Map<string, Bundle>[] = [];
@@ -131,9 +156,10 @@ export function generateSchedules(
     };
   });
 
+  const gapSign = gapPreference === "minimize" ? 1 : -1;
   scored.sort((a, b) => {
     if (a.fitsTimeRange !== b.fitsTimeRange) return a.fitsTimeRange ? -1 : 1;
-    return a.gapMinutes - b.gapMinutes;
+    return gapSign * (a.gapMinutes - b.gapMinutes);
   });
 
   const selected: CandidateSchedule[] = [];
@@ -150,5 +176,6 @@ export function generateSchedules(
     schedules: selected,
     anyValidSchedule: scored.length > 0,
     anyFitsTimeRange: scored.some((s) => s.fitsTimeRange),
+    unschedulableCourses,
   };
 }

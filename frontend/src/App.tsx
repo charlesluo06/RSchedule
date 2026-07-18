@@ -5,7 +5,6 @@ import TermDropdown from "./components/TermDropdown";
 import CourseChipInput from "./components/CourseChipInput";
 import TimeRangeSlider from "./components/TimeRangeSlider";
 import GapControl from "./components/GapControl";
-import LockedConstraintPills from "./components/LockedConstraintPills";
 import CalendarGrid from "./components/CalendarGrid";
 import ScheduleTabs from "./components/ScheduleTabs";
 import ScheduleStats from "./components/ScheduleStats";
@@ -186,30 +185,33 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-6">
+    <div className="relative min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-4 sm:p-6">
+      {/* Purely decorative — soft brand-color corner washes (feathered
+          gradients, no hard shape edge) plus a faint dot grid, so the empty
+          space around the page content reads as intentional atmosphere
+          instead of unfinished emptiness or a shape that visually collides
+          with whatever's sitting on top of it. Shared by both setup and
+          results screens. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 0% 0%, rgba(0,61,165,0.24), transparent 40%), " +
+              "radial-gradient(circle at 100% 100%, rgba(255,184,28,0.22), transparent 40%)",
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+      </div>
+
       {step === "setup" && (
         <>
-          {/* Purely decorative — soft blurred brand-color blobs plus a faint
-              dot grid so the empty space around the setup card reads as
-              intentional atmosphere instead of unfinished emptiness. */}
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div
-              className="absolute -top-24 -left-24 h-96 w-96 rounded-full opacity-40 blur-3xl"
-              style={{ backgroundColor: "#003DA5" }}
-            />
-            <div
-              className="absolute -bottom-32 -right-24 h-[28rem] w-[28rem] rounded-full opacity-30 blur-3xl"
-              style={{ backgroundColor: "#FFB81C" }}
-            />
-            <div
-              className="absolute inset-0 opacity-[0.35]"
-              style={{
-                backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)",
-                backgroundSize: "28px 28px",
-              }}
-            />
-          </div>
-
           <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center gap-10 lg:flex-row lg:items-center lg:gap-16">
             <div className="flex w-full max-w-md flex-col gap-6 lg:flex-1">
               <div>
@@ -231,7 +233,9 @@ function App() {
                 ))}
               </ul>
 
-              <MiniCalendarPreview />
+              <div className="mt-6">
+                <MiniCalendarPreview />
+              </div>
             </div>
 
           <div className="w-full max-w-md shrink-0 overflow-hidden rounded-2xl border border-white/40 bg-white/60 shadow-lg backdrop-blur-md ring-1 ring-black/5">
@@ -268,15 +272,11 @@ function App() {
             />
           </div>
 
-          <div className="mt-5">
-            <LockedConstraintPills />
-          </div>
-
           <button
             type="button"
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className="mt-6 w-full cursor-pointer rounded-xl bg-accent-500 px-4 py-2.5 font-semibold text-primary-900
+            className="mt-10 w-full cursor-pointer rounded-xl bg-accent-500 px-4 py-2.5 font-semibold text-primary-900
                        transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {generateLoading ? "Generating…" : "Generate"}
@@ -295,15 +295,19 @@ function App() {
 
       {step === "results" && generateResult && (
         <div
-          className="animate-fade-in w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-6 shadow-lg
-                     backdrop-blur-md ring-1 ring-black/5"
+          className="animate-fade-in relative w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-4 shadow-lg
+                     backdrop-blur-md ring-1 ring-black/5 sm:p-6"
         >
-          <div className="mb-4 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold tracking-tight">
+          <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => setStep("setup")}
+              className="cursor-pointer text-2xl font-semibold tracking-tight"
+            >
               <span className="text-accent-500">R</span>
               <span className="text-primary-700">Schedule</span>
-            </h1>
-            <div className="flex items-center gap-4">
+            </button>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <button
                 type="button"
                 onClick={handleRefreshSeats}
@@ -347,7 +351,7 @@ function App() {
                   look like a floating rounded card with content ghosting
                   through it; a solid bar with a clean bottom border reads
                   as "pinned" instead of "awkwardly overlapping." */}
-              <div className="sticky top-0 z-10 -mx-6 mt-4 border-b border-neutral-200 bg-white px-6 py-3 shadow-sm">
+              <div className="sticky top-0 z-10 -mx-4 mt-4 border-b border-neutral-200 bg-white px-4 py-3 shadow-sm sm:-mx-6 sm:px-6">
                 <ScheduleTabs
                   schedules={generateResult.schedules}
                   activeTab={activeTab}

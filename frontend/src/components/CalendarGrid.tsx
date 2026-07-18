@@ -43,7 +43,11 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
 
   return (
     <div>
-      <div className="flex">
+      {/* Below the sm breakpoint, 5 day columns squeeze too narrow to read —
+          give the grid a min-width and let it scroll horizontally instead
+          of crushing times/rooms/CRNs down to illegible text. */}
+      <div className="overflow-x-auto">
+      <div className="flex min-w-160 sm:min-w-0">
         {/* Hour-axis gutter */}
         <div className="relative w-12 shrink-0" style={{ height: totalHeight }}>
           {hours.map((h) => (
@@ -104,6 +108,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
             </div>
           </div>
         ))}
+      </div>
       </div>
 
       <ArrangedNote sections={arrangedSections} />

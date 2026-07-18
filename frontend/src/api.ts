@@ -1,7 +1,14 @@
 import type { Bundle, CourseCodeOption, GenerateResponse, Preferences, Subject, Term } from "./types";
 
+// Locally, Vite's dev proxy forwards same-origin paths like "/terms" to the
+// backend on :3001 (see vite.config.ts), so this stays "" and requests never
+// leave the page's own origin. In production the frontend and backend are
+// separate Vercel deployments (different domains), so this needs to point
+// at the backend's actual URL — set via VITE_API_BASE_URL at build time.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+
 export async function getTerms(): Promise<Term[]> {
-  const response = await fetch("/terms");
+  const response = await fetch(`${API_BASE}/terms`);
   if (!response.ok) {
     throw new Error("Failed to load terms from UCR.");
   }
@@ -10,7 +17,7 @@ export async function getTerms(): Promise<Term[]> {
 
 export async function getSubjects(termCode: string): Promise<Subject[]> {
   const params = new URLSearchParams({ term: termCode });
-  const response = await fetch(`/subjects?${params}`);
+  const response = await fetch(`${API_BASE}/subjects?${params}`);
   if (!response.ok) {
     throw new Error("Failed to load subjects.");
   }
@@ -19,7 +26,7 @@ export async function getSubjects(termCode: string): Promise<Subject[]> {
 
 export async function getCourseCodesForSubject(subject: string, termCode: string): Promise<CourseCodeOption[]> {
   const params = new URLSearchParams({ subject, term: termCode });
-  const response = await fetch(`/course-codes?${params}`);
+  const response = await fetch(`${API_BASE}/course-codes?${params}`);
   if (!response.ok) {
     throw new Error("Failed to load course codes.");
   }
@@ -31,7 +38,7 @@ export async function postCourses(
   termCode: string,
   forceRefresh = false,
 ): Promise<Record<string, Bundle[]>> {
-  const response = await fetch("/courses", {
+  const response = await fetch(`${API_BASE}/courses`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ courseCodes, termCode, forceRefresh }),
@@ -56,7 +63,7 @@ export async function postGenerate(
   courseBundles: Record<string, Bundle[]>,
   preferences: Preferences,
 ): Promise<GenerateResponse> {
-  const response = await fetch("/generate", {
+  const response = await fetch(`${API_BASE}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ courseBundles, preferences }),

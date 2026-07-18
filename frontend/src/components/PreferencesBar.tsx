@@ -13,7 +13,7 @@ interface PreferencesBarProps {
 function PreferencesBar({ preferences, onChange }: PreferencesBarProps) {
   return (
     <div className="flex flex-wrap items-start gap-6 rounded-xl border border-neutral-200 bg-white/70 p-4">
-      <div className="min-w-64 flex-1">
+      <div className="w-full min-w-0 flex-1 sm:w-auto sm:min-w-64">
         <TimeRangeSlider
           startTime={preferences.startTime}
           endTime={preferences.endTime}

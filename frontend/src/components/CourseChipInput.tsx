@@ -1,24 +1,158 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getCourseCodesForSubject, getSubjects } from "../api";
 import { normalizeCourseCode } from "../lib/normalize";
+import type { CourseCodeOption, Subject } from "../types";
+
+const MAX_SUGGESTIONS = 5;
+const DEBOUNCE_MS = 300;
 
 interface CourseChipInputProps {
   courseCodes: string[];
+  termCode: string;
   onChange: (codes: string[]) => void;
 }
 
-function CourseChipInput({ courseCodes, onChange }: CourseChipInputProps) {
+function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputProps) {
   const [draft, setDraft] = useState("");
+  const [suggestions, setSuggestions] = useState<CourseCodeOption[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
 
-  function addCourse() {
-    const code = normalizeCourseCode(draft);
-    if (code && !courseCodes.includes(code)) {
-      onChange([...courseCodes, code]);
+  // UCR does an EXACT match on subject code (txt_subject=PS returns nothing
+  // even though PSYC exists) — so typed letters can't be assumed to *be* a
+  // subject. Instead we fetch the full subject list once per term, then match
+  // typed letters as a *prefix* against it. That prefix can match zero, one,
+  // or several real subjects (e.g. "MA" matches MATH, plus any other subject
+  // starting with those letters) — every match gets its course list fetched.
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+
+  // Per-subject cache, keyed by "SUBJECT:termCode" — once we've fetched a
+  // subject's full course list, every further keystroke within that subject
+  // is just filtering this array, no more network calls. A ref (not state)
+  // because updating it should never itself trigger a re-render.
+  const courseCodeCache = useRef<Map<string, CourseCodeOption[]>>(new Map());
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!termCode) {
+      setSubjects([]);
+      return;
+    }
+    let cancelled = false;
+    getSubjects(termCode)
+      .then((list) => {
+        if (!cancelled) setSubjects(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSubjects([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [termCode]);
+
+  useEffect(() => {
+    // Clear any pending fetch if the component unmounts mid-debounce.
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
+
+  function applySuggestions(list: CourseCodeOption[], normalizedDraft: string) {
+    const filtered = list
+      .filter((option) => option.code.startsWith(normalizedDraft))
+      .slice(0, MAX_SUGGESTIONS);
+    setSuggestions(filtered);
+    setSuggestionsOpen(filtered.length > 0);
+    setHighlightedIndex(0);
+  }
+
+  async function loadCourseCodes(subjectCode: string): Promise<CourseCodeOption[]> {
+    const cacheKey = `${subjectCode}:${termCode}`;
+    const cached = courseCodeCache.current.get(cacheKey);
+    if (cached) return cached;
+    const codes = await getCourseCodesForSubject(subjectCode, termCode);
+    courseCodeCache.current.set(cacheKey, codes);
+    return codes;
+  }
+
+  function handleDraftChange(value: string) {
+    setDraft(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    const normalized = normalizeCourseCode(value);
+    const prefix = normalized.match(/^[A-Za-z]+/)?.[0] ?? "";
+    if (prefix.length < 2 || !termCode || subjects.length === 0) {
+      setSuggestionsOpen(false);
+      return;
+    }
+
+    const matchingSubjects = subjects.filter((s) => s.code.startsWith(prefix));
+    if (matchingSubjects.length === 0) {
+      setSuggestionsOpen(false);
+      return;
+    }
+
+    // If every matching subject's course list is already cached, apply
+    // instantly with no debounce delay — matches the snappy feel of pure
+    // client-side filtering once a subject has been fetched before.
+    const allCached = matchingSubjects.every((s) => courseCodeCache.current.has(`${s.code}:${termCode}`));
+    if (allCached) {
+      const merged = matchingSubjects.flatMap((s) => courseCodeCache.current.get(`${s.code}:${termCode}`)!);
+      applySuggestions(merged, normalized);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        const results = await Promise.all(matchingSubjects.map((s) => loadCourseCodes(s.code)));
+        applySuggestions(results.flat(), normalized);
+      } catch {
+        // Autocomplete failing silently is fine — typing a code manually
+        // and pressing Enter still works as a fallback.
+        setSuggestionsOpen(false);
+      }
+    }, DEBOUNCE_MS);
+  }
+
+  function addCourse(code: string) {
+    const normalized = normalizeCourseCode(code);
+    if (normalized && !courseCodes.includes(normalized)) {
+      onChange([...courseCodes, normalized]);
     }
     setDraft("");
+    setSuggestionsOpen(false);
   }
 
   function removeCourse(code: string) {
     onChange(courseCodes.filter((c) => c !== code));
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (suggestionsOpen && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightedIndex((i) => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightedIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (e.key === "Escape") {
+        setSuggestionsOpen(false);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addCourse(suggestions[highlightedIndex].code);
+        return;
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      addCourse(draft);
+    }
   }
 
   return (
@@ -47,20 +181,45 @@ function CourseChipInput({ courseCodes, onChange }: CourseChipInputProps) {
         </div>
       )}
 
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            addCourse();
-          }
-        }}
-        placeholder="e.g. CS010"
-        className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-neutral-900
-                   placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-      />
+      <div className="relative">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => handleDraftChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => setSuggestionsOpen(false)}
+          placeholder="e.g. MATH010A"
+          role="combobox"
+          aria-expanded={suggestionsOpen}
+          aria-autocomplete="list"
+          className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-neutral-900
+                     placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+
+        {suggestionsOpen && (
+          <ul className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">
+            {suggestions.map((option, index) => (
+              <li key={option.code}>
+                <button
+                  type="button"
+                  // onMouseDown (not onClick) fires before the input's onBlur
+                  // closes the dropdown — onClick would arrive too late.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    addCourse(option.code);
+                  }}
+                  className={`flex w-full cursor-pointer flex-col px-3 py-1.5 text-left ${
+                    index === highlightedIndex ? "bg-primary-50" : "hover:bg-neutral-50"
+                  }`}
+                >
+                  <span className="text-sm font-medium text-neutral-900">{option.code}</span>
+                  <span className="truncate text-xs text-neutral-500">{option.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

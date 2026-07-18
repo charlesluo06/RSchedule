@@ -33,6 +33,16 @@ export interface Term {
   description: string;
 }
 
+export interface CourseCodeOption {
+  code: string;
+  title: string;
+}
+
+export interface Subject {
+  code: string;
+  description: string;
+}
+
 // "minimize" = Packed, "maximize" = Spread, "none" = Any (don't care about gaps).
 export type GapPreference = "minimize" | "maximize" | "none";
 

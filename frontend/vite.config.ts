@@ -9,6 +9,8 @@ export default defineConfig({
   server: {
     proxy: {
       "/terms": "http://localhost:3001",
+      "/subjects": "http://localhost:3001",
+      "/course-codes": "http://localhost:3001",
       "/courses": "http://localhost:3001",
       "/generate": "http://localhost:3001",
     },

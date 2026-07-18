@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Section } from "../types";
 import type { CourseColor } from "../lib/colors";
@@ -12,6 +12,14 @@ interface ClassDetailModalProps {
 }
 
 function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailModalProps) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopyCrn() {
+    navigator.clipboard.writeText(section.crn);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   // Escape closes the modal, same as clicking outside it — a modal that
   // only responds to one dismissal method is a small but real usability gap.
   useEffect(() => {
@@ -53,7 +61,8 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
       role="presentation"
     >
       <div
-        className="animate-fade-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl ring-1 ring-black/5"
+        className="animate-fade-in w-full max-w-sm rounded-2xl border border-white/40 bg-white/60 p-6 shadow-xl
+                   backdrop-blur-md ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -88,7 +97,33 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-neutral-500">CRN</dt>
-            <dd className="font-mono text-neutral-900">{section.crn}</dd>
+            <dd>
+              <button
+                type="button"
+                onClick={handleCopyCrn}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#1a56db] px-2 py-1
+                           font-mono text-white"
+              >
+                {copied ? (
+                  "Copied!"
+                ) : (
+                  <>
+                    {section.crn}
+                    <svg
+                      viewBox="0 0 20 20"
+                      className="h-3.5 w-3.5 text-accent-400"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      aria-hidden="true"
+                    >
+                      <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                      <path d="M4.5 12.5v-8a1 1 0 0 1 1-1h8" strokeLinecap="round" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-neutral-500">Seats available</dt>

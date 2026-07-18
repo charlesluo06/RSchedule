@@ -17,7 +17,7 @@ function ScheduleTabs({ schedules, activeTab, onChange }: ScheduleTabsProps) {
           onClick={() => onChange(index)}
           className={`flex flex-1 cursor-pointer flex-col gap-0.5 rounded-xl border px-3 py-2 text-left transition-colors ${
             index === activeTab
-              ? "border-primary-500 bg-primary-50"
+              ? "border-accent-500 bg-accent-500/10"
               : "border-neutral-200 bg-white hover:bg-neutral-50"
           }`}
         >

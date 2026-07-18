@@ -39,12 +39,11 @@ function randomSessionId(): string {
 }
 
 /**
- * Performs the three-step handshake Banner requires before searchResults
- * will return real data: pick up a session cookie, tell the server which
- * term we're searching, then reset any stale search-form state tied to
- * that session.
+ * Negotiates the session cookie and selects the term — the two steps of
+ * Banner's handshake that only depend on the term, not on what's being
+ * searched for. Safe to reuse across many searches.
  */
-async function establishSession(termCode: string): Promise<CookieJar> {
+async function negotiateBaseCookies(termCode: string): Promise<CookieJar> {
   const jar = new CookieJar();
   const headers = { "User-Agent": "Mozilla/5.0" };
 
@@ -58,12 +57,51 @@ async function establishSession(termCode: string): Promise<CookieJar> {
   });
   jar.absorb(step2);
 
-  const step3 = await fetch(`${BASE}/classSearch/resetDataForm?resetTerm=${termCode}`, {
-    headers: { ...headers, Cookie: jar.header() },
-  });
-  jar.absorb(step3);
-
   return jar;
+}
+
+// Re-negotiating the base cookies is what made autocomplete slow (every
+// search redid this 2-request handshake first). It doesn't depend on
+// anything but the term, so it's cached briefly and reused.
+const SESSION_TTL_MS = 5 * 60 * 1000;
+const sessionCache = new Map<string, { jar: CookieJar; expiresAt: number }>();
+
+async function getBaseSession(termCode: string): Promise<CookieJar> {
+  const cached = sessionCache.get(termCode);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.jar;
+  }
+  const jar = await negotiateBaseCookies(termCode);
+  sessionCache.set(termCode, { jar, expiresAt: Date.now() + SESSION_TTL_MS });
+  return jar;
+}
+
+// Banner's search results are stateful per session, not just per request:
+// `resetDataForm` has to run immediately before EVERY individual search, and
+// only one search can be in flight on a given session at a time — running
+// two searches concurrently on the same session causes Banner to hand back
+// one search's results for the other (confirmed: fetching CS100 then CS061
+// on a reused session returned identical, wrong section data for both).
+// Reusing the base cookies is still a win (skips the 2-request cookie/term
+// dance), but the reset+search pair itself must be serialized per term.
+const searchQueues = new Map<string, Promise<unknown>>();
+
+function runSerialized<T>(termCode: string, task: () => Promise<T>): Promise<T> {
+  const previous = searchQueues.get(termCode) ?? Promise.resolve();
+  const chained = previous.then(task, task);
+  searchQueues.set(termCode, chained.catch(() => undefined));
+  return chained;
+}
+
+async function withSearchSession<T>(termCode: string, search: (jar: CookieJar) => Promise<T>): Promise<T> {
+  return runSerialized(termCode, async () => {
+    const jar = await getBaseSession(termCode);
+    const reset = await fetch(`${BASE}/classSearch/resetDataForm?resetTerm=${termCode}`, {
+      headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
+    });
+    jar.absorb(reset);
+    return search(jar);
+  });
 }
 
 export interface Term {
@@ -90,6 +128,31 @@ export async function fetchTerms(): Promise<Term[]> {
     throw new Error(`UCR getTerms failed with status ${response.status}`);
   }
   return (await response.json()) as Term[];
+}
+
+export interface Subject {
+  code: string; // e.g. "PSYC"
+  description: string; // e.g. "Psychology"
+}
+
+/**
+ * Fetches UCR's full list of subject codes for a term. Needed because
+ * subject codes vary in length (2-4+ letters) and UCR's search does an
+ * EXACT match on subject — searching "PS" (a prefix of "PSYC") returns zero
+ * results, it does NOT prefix-match. So autocomplete needs this real list
+ * to know which complete subject(s) a partial prefix like "PS" could mean,
+ * rather than assuming whatever's typed so far IS the whole subject code.
+ */
+export async function fetchSubjects(termCode: string): Promise<Subject[]> {
+  return withSearchSession(termCode, async (jar) => {
+    const response = await fetch(`${BASE}/classSearch/get_subject?searchTerm=&term=${termCode}&offset=1&max=500`, {
+      headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
+    });
+    if (!response.ok) {
+      throw new Error(`UCR get_subject failed with status ${response.status}`);
+    }
+    return (await response.json()) as Subject[];
+  });
 }
 
 interface RawMeetingTime {
@@ -233,32 +296,87 @@ export async function fetchCourseBundles(courseCode: string, termCode: string): 
   const subject = courseCode.match(/^[A-Za-z]+/)?.[0] ?? "";
   const courseNumber = courseCode.slice(subject.length);
 
-  const jar = await establishSession(termCode);
+  const sections = await withSearchSession(termCode, async (jar) => {
+    const params = new URLSearchParams({
+      txt_subject: subject,
+      txt_courseNumber: courseNumber,
+      txt_term: termCode,
+      uniqueSessionId: randomSessionId(),
+      pageOffset: "0",
+      pageMaxSize: "50",
+      sortColumn: "subjectDescription",
+      sortDirection: "asc",
+    });
 
-  const params = new URLSearchParams({
-    txt_subject: subject,
-    txt_courseNumber: courseNumber,
-    txt_term: termCode,
-    uniqueSessionId: randomSessionId(),
-    pageOffset: "0",
-    pageMaxSize: "50",
-    sortColumn: "subjectDescription",
-    sortDirection: "asc",
+    const response = await fetch(`${BASE}/searchResults/searchResults?${params}`, {
+      headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
+    });
+
+    if (!response.ok) {
+      throw new Error(`UCR search failed with status ${response.status}`);
+    }
+
+    const body = (await response.json()) as { success: boolean; data: RawSection[] };
+    if (!body.success) {
+      throw new Error("UCR search reported failure");
+    }
+
+    return body.data.map(normalizeSection);
   });
 
-  const response = await fetch(`${BASE}/searchResults/searchResults?${params}`, {
-    headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
-  });
-
-  if (!response.ok) {
-    throw new Error(`UCR search failed with status ${response.status}`);
-  }
-
-  const body = (await response.json()) as { success: boolean; data: RawSection[] };
-  if (!body.success) {
-    throw new Error("UCR search reported failure");
-  }
-
-  const sections = body.data.map(normalizeSection);
   return groupIntoBundles(courseCode, sections);
+}
+
+export interface CourseCodeOption {
+  code: string;
+  title: string;
+}
+
+interface RawCourseListItem {
+  subjectCourse: string;
+  courseTitle: string;
+}
+
+/**
+ * Fetches every course code offered under one subject (e.g. "CS") for a
+ * term — powers the course-code autocomplete. Lighter than
+ * fetchCourseBundles: no course-number filter (we want the WHOLE subject),
+ * and we only need code + title, not full section/meeting data.
+ */
+export async function fetchCourseCodesForSubject(subject: string, termCode: string): Promise<CourseCodeOption[]> {
+  return withSearchSession(termCode, async (jar) => {
+    const params = new URLSearchParams({
+      txt_subject: subject,
+      txt_term: termCode,
+      uniqueSessionId: randomSessionId(),
+      pageOffset: "0",
+      pageMaxSize: "1000",
+      sortColumn: "subjectDescription",
+      sortDirection: "asc",
+    });
+
+    const response = await fetch(`${BASE}/searchResults/searchResults?${params}`, {
+      headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
+    });
+
+    if (!response.ok) {
+      throw new Error(`UCR search failed with status ${response.status}`);
+    }
+
+    const body = (await response.json()) as { success: boolean; data: RawCourseListItem[] };
+    if (!body.success) {
+      throw new Error("UCR search reported failure");
+    }
+
+    // A subject search returns one row per SECTION, not per course — many
+    // rows share the same subjectCourse (e.g. every CS005 lecture/discussion).
+    // Dedupe down to one entry per unique course code.
+    const seen = new Map<string, string>();
+    for (const item of body.data) {
+      if (!seen.has(item.subjectCourse)) {
+        seen.set(item.subjectCourse, item.courseTitle);
+      }
+    }
+    return [...seen.entries()].map(([code, title]) => ({ code, title }));
+  });
 }

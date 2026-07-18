@@ -95,6 +95,26 @@ input[type="range"].range-thumb::-moz-range-thumb {
   animation: fade-in-up 0.35s ease-out;
 }
 
+/* Boot screen: a grayscale logo "fills up" with full color from the bottom
+   edge upward, looping (alternate = fills then drains) while we don't know
+   how long the initial /terms fetch will take. clip-path inset(top ...)
+   hides everything above that top offset — animating it from 100% (fully
+   hidden) to 0% (fully shown) reveals the image starting at its bottom. */
+@keyframes logo-fill {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0% 0 0 0);
+  }
+}
+
+.animate-logo-fill {
+  /* linear (not ease-in-out) so it starts moving immediately — an eased
+     start reads as a pause before anything visibly happens. */
+  animation: logo-fill 0.7s linear infinite alternate;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { getCourseBundles } from "./services/courseService.js";
+import { getCourseBundles, getCourseCodesForSubject, getSubjects } from "./services/courseService.js";
 import { fetchTerms } from "./services/ucrClient.js";
 import { CandidateSchedule, Bundle } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
@@ -19,6 +19,38 @@ app.get("/terms", async (_req, res) => {
   } catch (err) {
     console.error("Failed to fetch terms from UCR:", err);
     res.status(502).json({ error: "Failed to load terms from UCR. Please try again shortly." });
+  }
+});
+
+app.get("/subjects", async (req, res) => {
+  const termCode = typeof req.query.term === "string" ? req.query.term : "";
+  if (!termCode) {
+    res.status(400).json({ error: "term query param is required" });
+    return;
+  }
+
+  try {
+    res.json(await getSubjects(termCode));
+  } catch (err) {
+    console.error(`Failed to fetch subjects for ${termCode}:`, err);
+    res.status(502).json({ error: "Failed to load subjects from UCR. Please try again shortly." });
+  }
+});
+
+app.get("/course-codes", async (req, res) => {
+  const subject = typeof req.query.subject === "string" ? req.query.subject.toUpperCase() : "";
+  const termCode = typeof req.query.term === "string" ? req.query.term : "";
+
+  if (!subject || !termCode) {
+    res.status(400).json({ error: "subject and term query params are required" });
+    return;
+  }
+
+  try {
+    res.json(await getCourseCodesForSubject(subject, termCode));
+  } catch (err) {
+    console.error(`Failed to fetch course codes for ${subject} (${termCode}):`, err);
+    res.status(502).json({ error: "Failed to load course codes from UCR. Please try again shortly." });
   }
 });
 

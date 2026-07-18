@@ -6,7 +6,7 @@ interface GapControlProps {
 }
 
 const OPTIONS: { value: GapPreference; label: string }[] = [
-  { value: "minimize", label: "Packed" },
+  { value: "minimize", label: "Smallest" },
   { value: "none", label: "Any" },
 ];
 

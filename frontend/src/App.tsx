@@ -12,12 +12,18 @@ import ScheduleStats from "./components/ScheduleStats";
 import PreferencesBar from "./components/PreferencesBar";
 import MessageBanner from "./components/MessageBanner";
 import UnschedulableBadges from "./components/UnschedulableBadges";
+import BootScreen from "./components/BootScreen";
 
 function App() {
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermCode, setSelectedTermCode] = useState("");
   const [termsLoading, setTermsLoading] = useState(true);
   const [termsError, setTermsError] = useState<string | null>(null);
+  // A real /terms fetch can resolve in well under a second, which would cut
+  // the boot animation off before it ever gets to play. This guarantees the
+  // boot screen stays up for at least one full fill cycle regardless of how
+  // fast the network actually is.
+  const [bootMinTimeElapsed, setBootMinTimeElapsed] = useState(false);
   const [courseCodes, setCourseCodes] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<Preferences>({
     startTime: "09:00",
@@ -33,14 +39,21 @@ function App() {
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
+  // Matches the .animate-logo-fill CSS duration (0.7s) so the boot screen
+  // never disappears mid-animation on a fast connection.
+  useEffect(() => {
+    const timer = setTimeout(() => setBootMinTimeElapsed(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Fetch the live term list once, when the app first loads.
   useEffect(() => {
     getTerms()
       .then((fetchedTerms) => {
         // Term codes are "YYYY" + a 2-digit term indicator (e.g. "202540" =
         // Fall 2025) — older terms are still returned by UCR but aren't
-        // useful for planning a future schedule, so we only show 2025+.
-        const recentTerms = fetchedTerms.filter((term) => Number(term.code.slice(0, 4)) >= 2025);
+        // useful for planning a future schedule, so we only show 2026+.
+        const recentTerms = fetchedTerms.filter((term) => Number(term.code.slice(0, 4)) >= 2026);
         setTerms(recentTerms);
         setSelectedTermCode(recentTerms[0]?.code ?? "");
       })
@@ -115,11 +128,20 @@ function App() {
   const anyFitsTimeRange = generateResult?.schedules.some((s) => s.fitsTimeRange) ?? false;
   const showCalendar = Boolean(activeSchedule) && anyFitsTimeRange;
 
+  if (termsLoading || !bootMinTimeElapsed) {
+    return <BootScreen />;
+  }
+
   return (
     <div className="min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-6">
       {step === "setup" && (
-        <div className="animate-fade-in w-full max-w-sm rounded-2xl border border-white/40 bg-white/60 p-6 shadow-lg backdrop-blur-md ring-1 ring-black/5">
-          <h1 className="text-2xl font-semibold text-primary-700 tracking-tight">RSchedule</h1>
+        <div className="animate-fade-in w-full max-w-md overflow-hidden rounded-2xl border border-white/40 bg-white/60 shadow-lg backdrop-blur-md ring-1 ring-black/5">
+          <div className="h-1.5 w-full bg-linear-to-r from-accent-400 via-accent-500 to-accent-600" />
+          <div className="p-6">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            <span className="text-accent-500">R</span>
+            <span className="text-primary-700">Schedule</span>
+          </h1>
 
           <div className="mt-4">
             <TermDropdown
@@ -132,7 +154,7 @@ function App() {
           </div>
 
           <div className="mt-4">
-            <CourseChipInput courseCodes={courseCodes} onChange={setCourseCodes} />
+            <CourseChipInput courseCodes={courseCodes} termCode={selectedTermCode} onChange={setCourseCodes} />
           </div>
 
           <div className="mt-5">
@@ -171,6 +193,7 @@ function App() {
               {generateError}
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -180,7 +203,10 @@ function App() {
                      backdrop-blur-md ring-1 ring-black/5"
         >
           <div className="mb-4 flex items-center justify-between">
-            <h1 className="text-xl font-semibold text-primary-700 tracking-tight">RSchedule</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              <span className="text-accent-500">R</span>
+              <span className="text-primary-700">Schedule</span>
+            </h1>
             <div className="flex items-center gap-4">
               <button
                 type="button"

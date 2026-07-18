@@ -1,12 +1,16 @@
 import { Bundle } from "../types.js";
-import { fetchCourseBundles } from "./ucrClient.js";
+import { CourseCodeOption, Subject, fetchCourseBundles, fetchCourseCodesForSubject, fetchSubjects } from "./ucrClient.js";
 import {
   applySeats,
   extractSeatsByCrn,
   getCachedBundles,
+  getCachedCourseCodes,
   getCachedSeats,
+  getCachedSubjects,
   setCachedBundles,
+  setCachedCourseCodes,
   setCachedSeats,
+  setCachedSubjects,
 } from "./cache.js";
 
 /**
@@ -63,4 +67,37 @@ export async function getCourseBundles(
   }
 
   return freshBundles;
+}
+
+/**
+ * Powers the course-code autocomplete: cache-first list of every course
+ * offered under a subject for a term. No seat-freshness concerns here (a
+ * course's existence doesn't flicker minute to minute the way seats do), so
+ * this is a simple cache-or-fetch, no forceRefresh/fallback complexity needed.
+ */
+export async function getCourseCodesForSubject(subject: string, termCode: string): Promise<CourseCodeOption[]> {
+  const cached = await getCachedCourseCodes(subject, termCode);
+  if (cached) return cached;
+
+  const fresh = await fetchCourseCodesForSubject(subject, termCode);
+  try {
+    await setCachedCourseCodes(subject, termCode, fresh);
+  } catch (err) {
+    console.warn(`Failed to write course-codes cache for ${subject} (${termCode}); continuing with fresh data.`, err);
+  }
+  return fresh;
+}
+
+/** Cache-first list of every subject UCR offers for a term. */
+export async function getSubjects(termCode: string): Promise<Subject[]> {
+  const cached = await getCachedSubjects(termCode);
+  if (cached) return cached;
+
+  const fresh = await fetchSubjects(termCode);
+  try {
+    await setCachedSubjects(termCode, fresh);
+  } catch (err) {
+    console.warn(`Failed to write subjects cache for ${termCode}; continuing with fresh data.`, err);
+  }
+  return fresh;
 }

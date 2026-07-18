@@ -61,8 +61,8 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
       role="presentation"
     >
       <div
-        className="animate-fade-in w-full max-w-sm rounded-2xl border border-white/40 bg-white/60 p-6 shadow-xl
-                   backdrop-blur-md ring-1 ring-black/5"
+        className="animate-fade-in w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl
+                   ring-1 ring-black/5"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

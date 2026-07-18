@@ -13,59 +13,6 @@ import PreferencesBar from "./components/PreferencesBar";
 import MessageBanner from "./components/MessageBanner";
 import UnschedulableBadges from "./components/UnschedulableBadges";
 import BootScreen from "./components/BootScreen";
-import { courseColorForIndex } from "./lib/colors";
-
-const PITCH_FEATURES = [
-  "Live seat counts pulled straight from UCR",
-  "Zero overlapping classes, guaranteed",
-  "Ranked by fewest gaps between classes",
-];
-
-function CheckIcon() {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      className="h-4 w-4 shrink-0 text-primary-500"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      aria-hidden="true"
-    >
-      <circle cx="10" cy="10" r="8" />
-      <path d="M6.5 10l2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-// A hand-placed decorative preview of what a generated schedule looks like —
-// purely illustrative (no real data), just to give the empty space next to
-// the setup card some visual product context instead of being blank.
-function MiniCalendarPreview() {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-  const blocksByDay: (number | null)[][] = [[0, 2], [null, 1], [0, null], [null, 1], [2, null]];
-  return (
-    <div className="hidden rounded-2xl border border-neutral-200 bg-white/70 p-4 shadow-sm lg:block">
-      <div className="grid grid-cols-5 gap-2">
-        {days.map((day, i) => (
-          <div key={day} className="flex flex-col gap-1.5">
-            <span className="text-center text-[10px] font-medium text-neutral-400">{day}</span>
-            {blocksByDay[i].map((colorIndex, j) =>
-              colorIndex === null ? (
-                <div key={j} className="h-6" />
-              ) : (
-                <div
-                  key={j}
-                  className="h-9 rounded-md"
-                  style={{ backgroundColor: courseColorForIndex(colorIndex).bg }}
-                />
-              ),
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const [terms, setTerms] = useState<Term[]>([]);
@@ -186,36 +133,39 @@ function App() {
   }
 
   return (
-    <div className="min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-6">
+    <div className="relative min-h-svh overflow-hidden bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-6">
       {step === "setup" && (
-        <div className="animate-fade-in flex w-full max-w-5xl flex-col items-center gap-10 lg:flex-row lg:items-center lg:gap-16">
-          <div className="flex w-full max-w-md flex-col gap-6 lg:flex-1">
-            <div>
-              <h1 className="text-4xl font-semibold tracking-tight lg:text-5xl">
-                <span className="text-accent-500">R</span>
-                <span className="text-primary-700">Schedule</span>
-              </h1>
-              <p className="mt-3 text-lg text-neutral-600">
-                Build a conflict-free UCR schedule in seconds — pick your courses, we handle the rest.
-              </p>
-            </div>
-
-            <ul className="flex flex-col gap-2.5">
-              {PITCH_FEATURES.map((feature) => (
-                <li key={feature} className="flex items-center gap-2.5 text-sm font-medium text-neutral-700">
-                  <CheckIcon />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-
-            <MiniCalendarPreview />
+        <>
+          {/* Purely decorative — soft blurred brand-color blobs plus a faint
+              dot grid so the empty space around the setup card reads as
+              intentional atmosphere instead of unfinished emptiness. */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div
+              className="absolute -top-24 -left-24 h-96 w-96 rounded-full opacity-40 blur-3xl"
+              style={{ backgroundColor: "#003DA5" }}
+            />
+            <div
+              className="absolute -bottom-32 -right-24 h-[28rem] w-[28rem] rounded-full opacity-30 blur-3xl"
+              style={{ backgroundColor: "#FFB81C" }}
+            />
+            <div
+              className="absolute inset-0 opacity-[0.35]"
+              style={{
+                backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)",
+                backgroundSize: "28px 28px",
+              }}
+            />
           </div>
 
-          <div className="w-full max-w-md shrink-0 overflow-hidden rounded-2xl border border-white/40 bg-white/60 shadow-lg backdrop-blur-md ring-1 ring-black/5">
+          <div className="animate-fade-in relative w-full max-w-md overflow-hidden rounded-2xl border border-white/40 bg-white/60 shadow-lg backdrop-blur-md ring-1 ring-black/5">
           <div className="h-1.5 w-full bg-linear-to-r from-accent-400 via-accent-500 to-accent-600" />
           <div className="p-6">
-          <div className="mt-0">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            <span className="text-accent-500">R</span>
+            <span className="text-primary-700">Schedule</span>
+          </h1>
+
+          <div className="mt-4">
             <TermDropdown
               terms={terms}
               selectedTermCode={selectedTermCode}
@@ -267,7 +217,7 @@ function App() {
           )}
           </div>
           </div>
-        </div>
+        </>
       )}
 
       {step === "results" && generateResult && (

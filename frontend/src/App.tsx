@@ -213,7 +213,7 @@ function App() {
       {step === "setup" && (
         <>
           <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center gap-10 lg:flex-row lg:items-center lg:gap-16">
-            <div className="flex w-full max-w-md flex-col gap-6 lg:flex-1">
+            <div className="flex w-full max-w-md flex-col items-center gap-6 text-center lg:flex-1 lg:items-start lg:text-left">
               <div>
                 <h1 className="text-4xl font-semibold tracking-tight lg:text-5xl">
                   <span className="text-accent-500">R</span>
@@ -224,7 +224,7 @@ function App() {
                 </p>
               </div>
 
-              <ul className="flex flex-col gap-2.5">
+              <ul className="flex flex-col items-center gap-2.5 lg:items-start">
                 {PITCH_FEATURES.map((feature) => (
                   <li key={feature} className="flex items-center gap-2.5 text-sm font-medium text-neutral-700">
                     <CheckIcon />

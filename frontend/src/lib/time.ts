@@ -10,6 +10,11 @@ export const SLIDER_STEP_MIN = 30;
 // "airy & spacious" density we're going for.
 export const HOUR_PX = 76;
 
+// On phones, the day columns are already narrow (scrolling horizontally to
+// fit all 5), so blocks get extra vertical room instead to keep their text
+// (course code, time, room, CRN) from feeling cramped.
+export const MOBILE_HOUR_PX = 104;
+
 export const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 
 export function minutesToTimeString(minutes: number): string {

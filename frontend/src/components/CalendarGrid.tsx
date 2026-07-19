@@ -1,10 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Bundle, Preferences, Section } from "../types";
 import { courseColorForIndex, type CourseColor } from "../lib/colors";
-import { DAY_ORDER, HOUR_PX, computeVisibleWindow, timeStringToMinutes } from "../lib/time";
+import { DAY_ORDER, HOUR_PX, MOBILE_HOUR_PX, computeVisibleWindow, timeStringToMinutes } from "../lib/time";
 import CalendarBlock from "./CalendarBlock";
 import ArrangedNote from "./ArrangedNote";
 import ClassDetailModal from "./ClassDetailModal";
+
+// Matches Tailwind's `sm` breakpoint (640px) — below it, rows switch to the
+// taller MOBILE_HOUR_PX so blocks have room to breathe on a phone screen.
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 639px)").matches);
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 639px)");
+    const handleChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handleChange);
+    return () => mql.removeEventListener("change", handleChange);
+  }, []);
+  return isMobile;
+}
 
 interface CalendarGridProps {
   selections: Record<string, Bundle>;
@@ -19,6 +32,8 @@ interface SelectedSection {
 
 function CalendarGrid({ selections, preferences }: CalendarGridProps) {
   const [selectedSection, setSelectedSection] = useState<SelectedSection | null>(null);
+  const isMobile = useIsMobile();
+  const hourPx = isMobile ? MOBILE_HOUR_PX : HOUR_PX;
 
   // Sorting course codes first (rather than using object key order, which
   // isn't guaranteed) means a course keeps the same color every time this
@@ -29,7 +44,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
   // instead of always rendering the full 7am-10pm slider range.
   const { startMin, endMin } = computeVisibleWindow(preferences.startTime, preferences.endTime, selections);
   const startHour = startMin / 60;
-  const totalHeight = ((endMin - startMin) / 60) * HOUR_PX;
+  const totalHeight = ((endMin - startMin) / 60) * hourPx;
   const hours = Array.from({ length: (endMin - startMin) / 60 + 1 }, (_, i) => startHour + i);
 
   // A section with no meetings has no day or time to be positioned by, so it
@@ -45,16 +60,27 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
     <div>
       {/* Below the sm breakpoint, 5 day columns squeeze too narrow to read —
           give the grid a min-width and let it scroll horizontally instead
-          of crushing times/rooms/CRNs down to illegible text. */}
-      <div className="overflow-x-auto">
-      <div className="flex min-w-160 sm:min-w-0">
+          of crushing times/rooms/CRNs down to illegible text. overflow-y is
+          explicitly "hidden" (not "visible") because CSS silently upgrades
+          a "visible" value to "auto" whenever the other axis isn't visible
+          (can't be overridden) — that auto-computed value is what was
+          turning this into a second, vertically-scrollable region that
+          captured touch-drag gestures instead of letting them reach the
+          page's own scroll. "hidden" is a real explicit value, so it isn't
+          touched by that rule, and nothing here actually overflows
+          vertically (the wrapper's height is intrinsic to its content), so
+          nothing is being clipped by it. sm:min-w-0 means desktop never
+          needs the horizontal scroll at all, so overflow resets fully
+          visible there. */}
+      <div className="overflow-x-auto overflow-y-hidden sm:overflow-visible">
+      <div className="flex min-w-180 sm:min-w-0">
         {/* Hour-axis gutter */}
         <div className="relative w-12 shrink-0" style={{ height: totalHeight }}>
           {hours.map((h) => (
             <span
               key={h}
               className="absolute right-1 -translate-y-1/2 text-xs text-neutral-500 tabular-nums"
-              style={{ top: (h - startHour) * HOUR_PX }}
+              style={{ top: (h - startHour) * hourPx }}
             >
               {h <= 12 ? `${h}${h === 12 ? "pm" : "am"}` : `${h - 12}pm`}
             </span>
@@ -72,7 +98,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
                 <div
                   key={h}
                   className="absolute inset-x-0 border-t border-neutral-100"
-                  style={{ top: (h - startHour) * HOUR_PX }}
+                  style={{ top: (h - startHour) * hourPx }}
                 />
               ))}
 
@@ -89,8 +115,8 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
                       return (
                         <CalendarBlock
                           key={`${section.crn}-${day}`}
-                          top={(meetingStartMin / 60) * HOUR_PX}
-                          height={((meetingEndMin - meetingStartMin) / 60) * HOUR_PX}
+                          top={(meetingStartMin / 60) * hourPx}
+                          height={((meetingEndMin - meetingStartMin) / 60) * hourPx}
                           color={color}
                           courseCode={courseCode}
                           sectionType={section.sectionType}

@@ -66,14 +66,14 @@ async function negotiateBaseCookies(termCode: string): Promise<CookieJar> {
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const sessionCache = new Map<string, { jar: CookieJar; expiresAt: number }>();
 
-async function getBaseSession(termCode: string): Promise<CookieJar> {
+async function getBaseSession(termCode: string): Promise<{ jar: CookieJar; isFresh: boolean }> {
   const cached = sessionCache.get(termCode);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.jar;
+    return { jar: cached.jar, isFresh: false };
   }
   const jar = await negotiateBaseCookies(termCode);
   sessionCache.set(termCode, { jar, expiresAt: Date.now() + SESSION_TTL_MS });
-  return jar;
+  return { jar, isFresh: true };
 }
 
 // Banner's search results are stateful per session, not just per request:
@@ -95,11 +95,18 @@ function runSerialized<T>(termCode: string, task: () => Promise<T>): Promise<T> 
 
 async function withSearchSession<T>(termCode: string, search: (jar: CookieJar) => Promise<T>): Promise<T> {
   return runSerialized(termCode, async () => {
-    const jar = await getBaseSession(termCode);
-    const reset = await fetch(`${BASE}/classSearch/resetDataForm?resetTerm=${termCode}`, {
-      headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
-    });
-    jar.absorb(reset);
+    const { jar, isFresh } = await getBaseSession(termCode);
+    // A just-negotiated session has never run a search on Banner's end, so
+    // there's no stale form state to reset yet — skipping this here shaves
+    // a full round-trip off the (already slow, first-of-a-term) cold path.
+    // Every subsequent search on a REUSED session still resets first, since
+    // that's what fixed the real cross-search data-collision bug.
+    if (!isFresh) {
+      const reset = await fetch(`${BASE}/classSearch/resetDataForm?resetTerm=${termCode}`, {
+        headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() },
+      });
+      jar.absorb(reset);
+    }
     return search(jar);
   });
 }

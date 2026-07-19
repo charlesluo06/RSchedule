@@ -212,7 +212,7 @@ function App() {
 
       {step === "setup" && (
         <>
-          <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center gap-4 lg:flex-row lg:items-center lg:gap-16">
+          <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center gap-2 lg:flex-row lg:items-center lg:gap-16">
             <div className="flex w-full max-w-md flex-col items-center gap-6 text-center lg:flex-1 lg:items-start lg:text-left">
               <div className="w-full">
                 <h1 className="text-4xl font-semibold tracking-tight lg:text-5xl">

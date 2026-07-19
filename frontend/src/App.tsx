@@ -78,8 +78,8 @@ function App() {
   const [bootMinTimeElapsed, setBootMinTimeElapsed] = useState(false);
   const [courseCodes, setCourseCodes] = useState<string[]>([]);
   const [preferences, setPreferences] = useState<Preferences>({
-    startTime: "09:00",
-    endTime: "17:00",
+    startTime: "08:00",
+    endTime: "20:00",
     gapPreference: "minimize",
   });
   // Held so preference changes on the results view can re-call postGenerate
@@ -212,7 +212,7 @@ function App() {
 
       {step === "setup" && (
         <>
-          <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center gap-10 lg:flex-row lg:items-center lg:gap-16">
+          <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center gap-4 lg:flex-row lg:items-center lg:gap-16">
             <div className="flex w-full max-w-md flex-col items-center gap-6 text-center lg:flex-1 lg:items-start lg:text-left">
               <div className="w-full">
                 <h1 className="text-4xl font-semibold tracking-tight lg:text-5xl">
@@ -224,7 +224,11 @@ function App() {
                 </p>
               </div>
 
-              <ul className="flex flex-col items-center gap-2.5 lg:items-start">
+              {/* Hidden below lg — on mobile the title + tagline already
+                  set the stage, and the form is the next thing that
+                  actually matters; the bullet list is a nice-to-have that
+                  was just adding scroll before getting to the form. */}
+              <ul className="hidden flex-col items-center gap-2.5 lg:flex lg:items-start">
                 {PITCH_FEATURES.map((feature) => (
                   <li key={feature} className="flex items-center gap-2.5 text-sm font-medium text-neutral-700">
                     <CheckIcon />

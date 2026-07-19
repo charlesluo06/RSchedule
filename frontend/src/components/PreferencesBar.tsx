@@ -12,7 +12,7 @@ interface PreferencesBarProps {
 // cheap to do repeatedly since it's calling /generate, not /courses.
 function PreferencesBar({ preferences, onChange }: PreferencesBarProps) {
   return (
-    <div className="flex flex-wrap items-start gap-6 rounded-xl border border-neutral-200 bg-white/70 p-4">
+    <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white/70 p-4 sm:flex-row sm:flex-wrap sm:items-start sm:gap-6">
       <div className="w-full min-w-0 flex-1 sm:w-auto sm:min-w-64">
         <TimeRangeSlider
           startTime={preferences.startTime}

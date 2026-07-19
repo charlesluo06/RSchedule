@@ -10,10 +10,12 @@ export const SLIDER_STEP_MIN = 30;
 // "airy & spacious" density we're going for.
 export const HOUR_PX = 76;
 
-// On phones, the day columns are already narrow (scrolling horizontally to
-// fit all 5), so blocks get extra vertical room instead to keep their text
-// (course code, time, room, CRN) from feeling cramped.
-export const MOBILE_HOUR_PX = 104;
+// On phones, the goal is a Google-Calendar-style zoomed-out week view — all
+// 5 days visible at once with no horizontal scroll, and short enough rows
+// that a whole day's worth of classes fits without excess vertical
+// scrolling either. Blocks show only the course title at this scale (see
+// CalendarBlock's `compact` prop); full details are a tap away.
+export const MOBILE_HOUR_PX = 44;
 
 export const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 

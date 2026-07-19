@@ -58,24 +58,14 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
 
   return (
     <div>
-      {/* Below the sm breakpoint, 5 day columns squeeze too narrow to read —
-          give the grid a min-width and let it scroll horizontally instead
-          of crushing times/rooms/CRNs down to illegible text. overflow-y is
-          explicitly "hidden" (not "visible") because CSS silently upgrades
-          a "visible" value to "auto" whenever the other axis isn't visible
-          (can't be overridden) — that auto-computed value is what was
-          turning this into a second, vertically-scrollable region that
-          captured touch-drag gestures instead of letting them reach the
-          page's own scroll. "hidden" is a real explicit value, so it isn't
-          touched by that rule, and nothing here actually overflows
-          vertically (the wrapper's height is intrinsic to its content), so
-          nothing is being clipped by it. sm:min-w-0 means desktop never
-          needs the horizontal scroll at all, so overflow resets fully
-          visible there. */}
-      <div className="overflow-x-auto overflow-y-hidden sm:overflow-visible">
-      <div className="flex min-w-180 sm:min-w-0">
+      {/* Mobile deliberately zooms OUT instead of scrolling horizontally —
+          all 5 days stay visible at once (like Google Calendar's phone
+          week view), with a much shorter hourPx and compact CalendarBlocks
+          (title only) making that legible instead of scrolling sideways to
+          read one day at a time. */}
+      <div className="flex">
         {/* Hour-axis gutter */}
-        <div className="relative w-12 shrink-0" style={{ height: totalHeight }}>
+        <div className="relative w-8 shrink-0 sm:w-12" style={{ height: totalHeight }}>
           {hours.map((h) => (
             <span
               key={h}
@@ -125,6 +115,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
                           startTime={meeting.startTime}
                           endTime={meeting.endTime}
                           seatsAvailable={section.seatsAvailable}
+                          compact={isMobile}
                           onClick={() => setSelectedSection({ courseCode, section, color })}
                         />
                       );
@@ -134,7 +125,6 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
             </div>
           </div>
         ))}
-      </div>
       </div>
 
       <ArrangedNote sections={arrangedSections} />

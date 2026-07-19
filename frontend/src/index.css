@@ -123,3 +123,16 @@ input[type="range"].range-thumb::-moz-range-thumb {
     scroll-behavior: auto !important;
   }
 }
+
+/* Hides the real scrollbar entirely — used where a custom, always-visible
+   scroll-position indicator (a plain div driven by scroll events) replaces
+   it instead, since native scrollbars (iOS Safari's in particular) are
+   OS-controlled overlays that only appear during an active scroll gesture
+   and can't be forced to stay visible at rest through CSS alone. */
+.no-native-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+
+.no-native-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}

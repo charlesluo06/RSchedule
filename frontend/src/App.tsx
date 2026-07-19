@@ -306,18 +306,21 @@ function App() {
             <button
               type="button"
               onClick={() => setStep("setup")}
-              className="cursor-pointer text-2xl font-semibold tracking-tight"
+              className="cursor-pointer text-2xl font-semibold tracking-tight opacity-100 transition-opacity hover:opacity-70"
             >
               <span className="text-accent-500">R</span>
               <span className="text-primary-700">Schedule</span>
             </button>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {/* On desktop this moves down to share a row with "Total gap"
+                  instead — see the sm:hidden/hidden-sm:inline-flex pairing
+                  below with ScheduleStats. */}
               <button
                 type="button"
                 onClick={handleRefreshSeats}
                 disabled={generateLoading}
                 className="cursor-pointer text-sm font-medium text-primary-700 hover:underline
-                           disabled:cursor-not-allowed disabled:opacity-50"
+                           disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
               >
                 {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
               </button>
@@ -361,8 +364,20 @@ function App() {
                   activeTab={activeTab}
                   onChange={setActiveTab}
                 />
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <ScheduleStats schedule={activeSchedule} />
+                  {/* Desktop-only placement, sharing a row with "Total gap"
+                      instead of sitting up in the title row (see the mobile
+                      version, hidden here via sm:hidden, up in the header). */}
+                  <button
+                    type="button"
+                    onClick={handleRefreshSeats}
+                    disabled={generateLoading}
+                    className="hidden shrink-0 cursor-pointer text-sm font-medium text-primary-700 hover:underline
+                               disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
+                  >
+                    {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
+                  </button>
                 </div>
               </div>
 

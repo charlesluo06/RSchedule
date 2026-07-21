@@ -69,18 +69,29 @@ function computeGapMinutes(meetings: Meeting[]): number {
 
 /**
  * Runs the exact backtracking search: tries every bundle for each course in
- * turn, pruning only branches that create an actual time conflict, and
- * collects every complete, non-conflicting schedule it finds.
+ * turn, pruning only branches that create an actual time conflict. Calls
+ * `onValid` for every complete, non-conflicting schedule it finds, passing
+ * the live (not cloned) `selections` map — callers that need to keep it past
+ * the call must clone it themselves, since it's mutated again immediately
+ * after `onValid` returns as the recursion unwinds.
+ *
+ * Courses picked from unrelated departments (e.g. gen-ed electives) rarely
+ * conflict with each other at all, so for those the search can find that a
+ * large fraction of the full combinatorial space is actually valid — up to
+ * hundreds of thousands of complete schedules for a handful of large
+ * courses. Streaming each one through `onValid` instead of collecting them
+ * into an array is what makes that case tractable (see `generateSchedules`,
+ * which only clones and keeps the running top few instead of all of them).
  */
 function search(
   courseOrder: { courseCode: string; bundles: Bundle[] }[],
   index: number,
   selections: Map<string, Bundle>,
   placedMeetings: Meeting[],
-  results: Map<string, Bundle>[],
+  onValid: (selections: Map<string, Bundle>) => void,
 ): void {
   if (index === courseOrder.length) {
-    results.push(new Map(selections));
+    onValid(selections);
     return;
   }
 
@@ -90,9 +101,40 @@ function search(
 
     selections.set(courseCode, bundle);
     const newMeetings = bundle.sections.flatMap((s) => s.meetings);
-    search(courseOrder, index + 1, selections, [...placedMeetings, ...newMeetings], results);
+    search(courseOrder, index + 1, selections, [...placedMeetings, ...newMeetings], onValid);
     selections.delete(courseCode);
   }
+}
+
+// Matches the ordering `generateSchedules` used to sort the full results
+// array by before slicing to the top few — kept as its own function so the
+// streaming version below can use identical tie-breaking when deciding
+// whether to keep a candidate, instead of sorting everything after the fact.
+function compareCandidates(a: CandidateSchedule, b: CandidateSchedule, gapSign: number): number {
+  if (a.fitsTimeRange !== b.fitsTimeRange) return a.fitsTimeRange ? -1 : 1;
+  return gapSign * (a.gapMinutes - b.gapMinutes);
+}
+
+// Keeps `sorted` holding only the best `maxResults` candidates seen so far
+// (per `compareCandidates`), inserting in sorted order and evicting the
+// worst one once it's full — equivalent to sorting everything and slicing,
+// but never materializes more than `maxResults` candidates at a time.
+function insertTopResult(
+  sorted: CandidateSchedule[],
+  candidate: CandidateSchedule,
+  maxResults: number,
+  gapSign: number,
+): void {
+  let insertAt = sorted.length;
+  for (let i = 0; i < sorted.length; i++) {
+    if (compareCandidates(candidate, sorted[i], gapSign) < 0) {
+      insertAt = i;
+      break;
+    }
+  }
+  if (insertAt >= maxResults) return; // wouldn't make the cut even with room
+  sorted.splice(insertAt, 0, candidate);
+  if (sorted.length > maxResults) sorted.pop();
 }
 
 function scheduleKey(selections: Map<string, Bundle>): string {
@@ -168,40 +210,47 @@ export function generateSchedules(
     }))
     .sort((a, b) => a.bundles.length - b.bundles.length);
 
-  const rawResults: Map<string, Bundle>[] = [];
-  search(courseOrder, 0, new Map(), [], rawResults);
-
-  const scored: CandidateSchedule[] = rawResults.map((selections) => {
-    const meetings = allMeetings(selections);
-    return {
-      selections,
-      gapMinutes: computeGapMinutes(meetings),
-      fitsTimeRange: computeFitsTimeRange(meetings, preference),
-    };
-  });
-
   // gapSign of 0 (for "none") makes the gap term drop out, so schedules are
   // ordered only by whether they fit the time window.
   const gapSign = gapPreference === "minimize" ? 1 : gapPreference === "maximize" ? -1 : 0;
-  scored.sort((a, b) => {
-    if (a.fitsTimeRange !== b.fitsTimeRange) return a.fitsTimeRange ? -1 : 1;
-    return gapSign * (a.gapMinutes - b.gapMinutes);
-  });
 
-  const selected: CandidateSchedule[] = [];
+  // Courses from unrelated departments (e.g. gen-ed electives) can turn out
+  // to have almost no real time conflicts at all, in which case the search
+  // below finds that a large fraction of the full combinatorial space is
+  // valid — this has measured in the hundreds of thousands of complete
+  // schedules for just 4 large courses. The old approach collected every one
+  // of those into an array, mapped and sorted the whole thing, then took the
+  // top 3 — which is what actually made that case take ~20 seconds (the
+  // traversal itself was never the bottleneck). Only ever keeping the
+  // running best `maxResults` candidates here, and only cloning a selection
+  // when it's actually good enough to keep, avoids doing that work at all.
+  let anyValidSchedule = false;
+  let anyFitsTimeRange = false;
   const seenKeys = new Set<string>();
-  for (const candidate of scored) {
-    const key = scheduleKey(candidate.selections);
-    if (seenKeys.has(key)) continue; // identical schedule, not a meaningfully distinct option
+  const selected: CandidateSchedule[] = [];
+
+  search(courseOrder, 0, new Map(), [], (liveSelections) => {
+    anyValidSchedule = true;
+    const meetings = allMeetings(liveSelections);
+    const fitsTimeRange = computeFitsTimeRange(meetings, preference);
+    if (fitsTimeRange) anyFitsTimeRange = true;
+
+    const key = scheduleKey(liveSelections);
+    if (seenKeys.has(key)) return; // identical schedule, not a meaningfully distinct option
     seenKeys.add(key);
-    selected.push(candidate);
-    if (selected.length === maxResults) break;
-  }
+
+    const candidate: CandidateSchedule = {
+      selections: new Map(liveSelections), // clone — liveSelections mutates as recursion unwinds
+      gapMinutes: computeGapMinutes(meetings),
+      fitsTimeRange,
+    };
+    insertTopResult(selected, candidate, maxResults, gapSign);
+  });
 
   return {
     schedules: selected,
-    anyValidSchedule: scored.length > 0,
-    anyFitsTimeRange: scored.some((s) => s.fitsTimeRange),
+    anyValidSchedule,
+    anyFitsTimeRange,
     unschedulableCourses,
   };
 }

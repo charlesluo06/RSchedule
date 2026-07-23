@@ -13,6 +13,7 @@ import MessageBanner from "./components/MessageBanner";
 import UnschedulableBadges from "./components/UnschedulableBadges";
 import BootScreen from "./components/BootScreen";
 import { courseColorForIndex } from "./lib/colors";
+import { totalUnits } from "./lib/time";
 
 const PITCH_FEATURES = [
   "Live seat counts pulled straight from UCR",
@@ -319,7 +320,8 @@ function App() {
                 type="button"
                 onClick={handleRefreshSeats}
                 disabled={generateLoading}
-                className="cursor-pointer text-sm font-medium text-primary-700 hover:underline
+                className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
+                           text-neutral-700 transition-colors hover:bg-neutral-100
                            disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
               >
                 {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
@@ -366,18 +368,27 @@ function App() {
                 />
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                   <ScheduleStats schedule={activeSchedule} />
-                  {/* Desktop-only placement, sharing a row with "Total gap"
-                      instead of sitting up in the title row (see the mobile
-                      version, hidden here via sm:hidden, up in the header). */}
-                  <button
-                    type="button"
-                    onClick={handleRefreshSeats}
-                    disabled={generateLoading}
-                    className="hidden shrink-0 cursor-pointer text-sm font-medium text-primary-700 hover:underline
-                               disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex"
-                  >
-                    {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
-                  </button>
+                  {/* Desktop-only group on the right: Total units (moved out
+                      of ScheduleStats here — see the sm:hidden pairing
+                      there) sitting just left of "Refresh seat counts",
+                      instead of up in the title row (see the mobile version
+                      of the button, hidden here via sm:hidden, up there). */}
+                  <div className="hidden shrink-0 items-center gap-4 sm:flex">
+                    <span className="text-sm text-neutral-700">
+                      <span className="font-medium text-primary-700">Total units:</span>{" "}
+                      {totalUnits(activeSchedule.selections)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRefreshSeats}
+                      disabled={generateLoading}
+                      className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
+                                 text-neutral-700 transition-colors hover:bg-neutral-100
+                                 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
+                    </button>
+                  </div>
                 </div>
               </div>
 

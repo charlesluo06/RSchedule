@@ -87,3 +87,16 @@ export function earliestStartLabel(selections: Record<string, Bundle>): string {
   if (allStartTimes.length === 0) return "No fixed meetings";
   return formatClock(minutesToTimeString(Math.min(...allStartTimes)));
 }
+
+// Sums creditHours across every section of every selected bundle. UCR only
+// puts the real credit value on one component per course (e.g. the lecture
+// carries it, discussion/lab report 0) — except standalone lab-only courses
+// (e.g. "BIOL05LA"), where every section already reports the same value.
+// Summing all sections in a bundle handles both cases correctly without
+// double-counting, since a bundle only ever has one section per type (never
+// two alternative lectures stacked together).
+export function totalUnits(selections: Record<string, Bundle>): number {
+  return Object.values(selections)
+    .flatMap((bundle) => bundle.sections)
+    .reduce((sum, section) => sum + section.creditHours, 0);
+}

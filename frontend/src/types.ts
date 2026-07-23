@@ -20,6 +20,7 @@ export interface Section {
   meetings: Meeting[]; // empty = arranged/async, no fixed time
   seatsAvailable: number;
   maximumEnrollment: number;
+  creditHours: number;
   instructor: string;
 }
 

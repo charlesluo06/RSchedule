@@ -18,6 +18,7 @@ export interface Section {
   meetings: Meeting[];
   seatsAvailable: number;
   maximumEnrollment: number;
+  creditHours: number;
   instructor: string;
 }
 

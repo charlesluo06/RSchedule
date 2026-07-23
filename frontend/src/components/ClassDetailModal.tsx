@@ -8,10 +8,11 @@ interface ClassDetailModalProps {
   courseCode: string;
   section: Section;
   color: CourseColor;
+  bundleCredits: number;
   onClose: () => void;
 }
 
-function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailModalProps) {
+function ClassDetailModal({ courseCode, section, color, bundleCredits, onClose }: ClassDetailModalProps) {
   const [copied, setCopied] = useState(false);
 
   function handleCopyCrn() {
@@ -96,6 +97,20 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
             <dd className="text-right font-medium text-neutral-900">{section.instructor}</dd>
           </div>
           <div className="flex justify-between gap-4">
+            <dt className="text-neutral-500">Seats available</dt>
+            <dd className="font-medium text-neutral-900 tabular-nums">
+              {section.seatsAvailable} / {section.maximumEnrollment}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            {/* This section's course may bundle a lecture + discussion/lab
+                together (e.g. one CRN each) — the credit value usually only
+                lives on one of them, so this is the BUNDLE's total, not just
+                this one section's own (often 0) credit count. */}
+            <dt className="text-neutral-500">Credits</dt>
+            <dd className="font-medium text-neutral-900 tabular-nums">{bundleCredits}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
             <dt className="text-neutral-500">CRN</dt>
             <dd>
               <button
@@ -123,12 +138,6 @@ function ClassDetailModal({ courseCode, section, color, onClose }: ClassDetailMo
                   </>
                 )}
               </button>
-            </dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-neutral-500">Seats available</dt>
-            <dd className="font-medium text-neutral-900 tabular-nums">
-              {section.seatsAvailable} / {section.maximumEnrollment}
             </dd>
           </div>
           <div>

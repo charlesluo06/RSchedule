@@ -1,5 +1,5 @@
 import type { SerializedSchedule } from "../types";
-import { earliestStartLabel, formatDuration } from "../lib/time";
+import { earliestStartLabel, formatDuration, totalUnits } from "../lib/time";
 
 interface ScheduleStatsProps {
   schedule: SerializedSchedule;
@@ -7,13 +7,22 @@ interface ScheduleStatsProps {
 
 function ScheduleStats({ schedule }: ScheduleStatsProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 text-sm">
+    <div className="flex w-full flex-wrap items-center justify-center gap-3 text-sm sm:w-auto sm:justify-start">
+      {/* Total units moves up to the header on desktop instead (see
+          App.tsx) — mobile has no room up there, so it stays down here. */}
+      <span className="text-neutral-700 sm:hidden">
+        <span className="font-medium text-primary-700">Total units:</span>{" "}
+        {totalUnits(schedule.selections)}
+      </span>
+      <span className="text-neutral-300 sm:hidden">·</span>
       <span className="text-neutral-700">
         <span className="font-medium text-primary-700">Total gap:</span>{" "}
         {formatDuration(schedule.gapMinutes)}
       </span>
-      <span className="text-neutral-300">·</span>
-      <span className="text-neutral-700">
+      {/* Earliest class is desktop-only — dropped on mobile to keep this
+          row from getting too crowded. */}
+      <span className="hidden text-neutral-300 sm:inline">·</span>
+      <span className="hidden text-neutral-700 sm:inline">
         <span className="font-medium text-primary-700">Earliest class:</span>{" "}
         {earliestStartLabel(schedule.selections)}
       </span>

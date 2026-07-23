@@ -181,6 +181,7 @@ interface RawSection {
   linkIdentifier: string | null;
   seatsAvailable: number;
   maximumEnrollment: number;
+  creditHours: number;
   faculty: { displayName: string; primaryIndicator: boolean }[];
   meetingsFaculty: { meetingTime: RawMeetingTime }[];
 }
@@ -219,6 +220,7 @@ function normalizeSection(raw: RawSection): Section {
     meetings,
     seatsAvailable: raw.seatsAvailable,
     maximumEnrollment: raw.maximumEnrollment,
+    creditHours: raw.creditHours,
     instructor: primaryFaculty?.displayName ?? "Staff",
   };
 }

@@ -28,6 +28,7 @@ interface SelectedSection {
   courseCode: string;
   section: Section;
   color: CourseColor;
+  bundleCredits: number;
 }
 
 function CalendarGrid({ selections, preferences }: CalendarGridProps) {
@@ -95,6 +96,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
               {sortedCourseCodes.map((courseCode, courseIndex) => {
                 const bundle = selections[courseCode];
                 const color = courseColorForIndex(courseIndex);
+                const bundleCredits = bundle.sections.reduce((sum, s) => sum + s.creditHours, 0);
 
                 return bundle.sections.flatMap((section) =>
                   section.meetings
@@ -116,7 +118,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
                           endTime={meeting.endTime}
                           seatsAvailable={section.seatsAvailable}
                           compact={isMobile}
-                          onClick={() => setSelectedSection({ courseCode, section, color })}
+                          onClick={() => setSelectedSection({ courseCode, section, color, bundleCredits })}
                         />
                       );
                     }),
@@ -134,6 +136,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
           courseCode={selectedSection.courseCode}
           section={selectedSection.section}
           color={selectedSection.color}
+          bundleCredits={selectedSection.bundleCredits}
           onClose={() => setSelectedSection(null)}
         />
       )}

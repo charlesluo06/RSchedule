@@ -12,6 +12,7 @@ import PreferencesBar from "./components/PreferencesBar";
 import MessageBanner from "./components/MessageBanner";
 import UnschedulableBadges from "./components/UnschedulableBadges";
 import BootScreen from "./components/BootScreen";
+import LegalModal from "./components/LegalModal";
 import { courseColorForIndex } from "./lib/colors";
 import { totalUnits } from "./lib/time";
 
@@ -91,6 +92,7 @@ function App() {
   const [step, setStep] = useState<"setup" | "results">("setup");
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
 
   // Matches the .animate-logo-fill CSS duration (0.7s) so the boot screen
   // never disappears mid-animation on a fast connection.
@@ -295,6 +297,29 @@ function App() {
           </div>
           </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setLegalModalOpen(true)}
+            className="absolute inset-x-0 bottom-4 flex cursor-pointer items-center justify-center gap-1
+                       text-xs text-neutral-400 hover:text-neutral-600"
+          >
+            Not affiliated with or endorsed by UCR.
+            <svg
+              viewBox="0 0 20 20"
+              className="h-3 w-3 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <circle cx="10" cy="10" r="7.5" />
+              <path d="M10 9v4.5" strokeLinecap="round" />
+              <circle cx="10" cy="6.5" r="0.75" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+
+          {legalModalOpen && <LegalModal onClose={() => setLegalModalOpen(false)} />}
         </>
       )}
 

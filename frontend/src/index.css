@@ -115,6 +115,22 @@ input[type="range"].range-thumb::-moz-range-thumb {
   animation: logo-fill 0.7s linear infinite alternate;
 }
 
+/* A moving-gradient "shimmer" bar — sweeps left-to-right on loop while a
+   real network fetch (not just the debounce wait) is in flight, e.g. the
+   course-code autocomplete search. */
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+.shimmer-sweep {
+  animation: shimmer-sweep 1s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

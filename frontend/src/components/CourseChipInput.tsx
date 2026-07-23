@@ -4,7 +4,7 @@ import { normalizeCourseCode } from "../lib/normalize";
 import type { CourseCodeOption, Subject } from "../types";
 
 const MAX_SUGGESTIONS = 5;
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 200;
 
 interface CourseChipInputProps {
   courseCodes: string[];
@@ -17,6 +17,11 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
   const [suggestions, setSuggestions] = useState<CourseCodeOption[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  // Only true while an actual network fetch is in flight (not during the
+  // debounce wait itself, and not for the instant client-side-cached path) —
+  // drives the shimmer bar under the input. Existing suggestions stay put
+  // while this is true rather than being cleared out from under the user.
+  const [isSearching, setIsSearching] = useState(false);
 
   // UCR does an EXACT match on subject code (txt_subject=PS returns nothing
   // even though PSYC exists) — so typed letters can't be assumed to *be* a
@@ -104,6 +109,7 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
     }
 
     debounceTimer.current = setTimeout(async () => {
+      setIsSearching(true);
       try {
         const results = await Promise.all(matchingSubjects.map((s) => loadCourseCodes(s.code)));
         applySuggestions(results.flat(), normalized);
@@ -111,6 +117,8 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
         // Autocomplete failing silently is fine — typing a code manually
         // and pressing Enter still works as a fallback.
         setSuggestionsOpen(false);
+      } finally {
+        setIsSearching(false);
       }
     }, DEBOUNCE_MS);
   }
@@ -195,6 +203,16 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
           className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-neutral-900
                      placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
+
+        {/* Shimmer bar — only while an actual network fetch is in flight
+            (not the debounce wait, not the instant cached path). Overlaps
+            the input's own bottom edge so it never shifts the dropdown's
+            position below it. */}
+        {isSearching && (
+          <div className="absolute inset-x-0 -bottom-1 h-1 overflow-hidden rounded-full bg-neutral-200">
+            <div className="shimmer-sweep h-full w-1/2 rounded-full bg-primary-500" />
+          </div>
+        )}
 
         {suggestionsOpen && (
           <ul className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">

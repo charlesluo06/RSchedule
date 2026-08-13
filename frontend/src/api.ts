@@ -33,6 +33,15 @@ export async function getCourseCodesForSubject(subject: string, termCode: string
   return response.json();
 }
 
+export async function getSectionAttributes(crn: string, termCode: string): Promise<string[]> {
+  const params = new URLSearchParams({ crn, term: termCode });
+  const response = await fetch(`${API_BASE}/section-attributes?${params}`);
+  if (!response.ok) {
+    throw new Error("Failed to load section attributes.");
+  }
+  return response.json();
+}
+
 export async function postCourses(
   courseCodes: string[],
   termCode: string,

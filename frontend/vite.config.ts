@@ -11,6 +11,7 @@ export default defineConfig({
       "/terms": "http://localhost:3001",
       "/subjects": "http://localhost:3001",
       "/course-codes": "http://localhost:3001",
+      "/section-attributes": "http://localhost:3001",
       "/courses": "http://localhost:3001",
       "/generate": "http://localhost:3001",
     },

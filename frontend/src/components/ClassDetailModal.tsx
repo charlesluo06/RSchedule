@@ -3,17 +3,40 @@ import { createPortal } from "react-dom";
 import type { Section } from "../types";
 import type { CourseColor } from "../lib/colors";
 import { formatClock } from "../lib/time";
+import { getSectionAttributes } from "../api";
 
 interface ClassDetailModalProps {
   courseCode: string;
   section: Section;
   color: CourseColor;
   bundleCredits: number;
+  termCode: string;
   onClose: () => void;
 }
 
-function ClassDetailModal({ courseCode, section, color, bundleCredits, onClose }: ClassDetailModalProps) {
+function ClassDetailModal({ courseCode, section, color, bundleCredits, termCode, onClose }: ClassDetailModalProps) {
   const [copied, setCopied] = useState(false);
+  const [geFulfillments, setGeFulfillments] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"details" | "fulfills">("details");
+
+  // Fetched on open, not eagerly for every section on the calendar — most
+  // sections never get their details looked at, so there's no reason to pay
+  // for this extra UCR call up front. Fails silently to an empty list on
+  // error, same as autocomplete does — a missing GE list isn't worth an
+  // error banner over.
+  useEffect(() => {
+    let cancelled = false;
+    getSectionAttributes(section.crn, termCode)
+      .then((attrs) => {
+        if (!cancelled) setGeFulfillments(attrs);
+      })
+      .catch(() => {
+        if (!cancelled) setGeFulfillments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section.crn, termCode]);
 
   function handleCopyCrn() {
     navigator.clipboard.writeText(section.crn);
@@ -57,7 +80,7 @@ function ClassDetailModal({ courseCode, section, color, bundleCredits, onClose }
   // whole calendar, not where I'm scrolled to" bug this fixes.
   return createPortal(
     <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-white/30 p-4 backdrop-blur-[2px]"
+      className="animate-fade-in fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-white/30 p-4 pt-[27vh] backdrop-blur-[2px]"
       onClick={onClose}
       role="presentation"
     >
@@ -91,72 +114,127 @@ function ClassDetailModal({ courseCode, section, color, bundleCredits, onClose }
           </button>
         </div>
 
-        <dl className="mt-4 flex flex-col gap-2.5 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-neutral-500">Instructor</dt>
-            <dd className="text-right font-medium text-neutral-900">{section.instructor}</dd>
+        {/* Fulfills tab only appears once we know there's actually
+            something to show there — no point offering a tab that always
+            leads to an empty page, and most sections fulfill zero GE
+            requirements. */}
+        {geFulfillments.length > 0 && (
+          <div className="mt-4 flex gap-1 border-b border-neutral-200">
+            <button
+              type="button"
+              onClick={() => setActiveTab("details")}
+              className={`cursor-pointer border-b-2 px-1 pb-2 text-sm font-medium transition-colors ${
+                activeTab === "details"
+                  ? "border-primary-500 text-primary-700"
+                  : "border-transparent text-neutral-500 hover:text-neutral-700"
+              }`}
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("fulfills")}
+              className={`ml-3 cursor-pointer border-b-2 px-1 pb-2 text-sm font-medium transition-colors ${
+                activeTab === "fulfills"
+                  ? "border-primary-500 text-primary-700"
+                  : "border-transparent text-neutral-500 hover:text-neutral-700"
+              }`}
+            >
+              Fulfills
+            </button>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-neutral-500">Seats available</dt>
-            <dd className="font-medium text-neutral-900 tabular-nums">
-              {section.seatsAvailable} / {section.maximumEnrollment}
-            </dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            {/* This section's course may bundle a lecture + discussion/lab
-                together (e.g. one CRN each) — the credit value usually only
-                lives on one of them, so this is the BUNDLE's total, not just
-                this one section's own (often 0) credit count. */}
-            <dt className="text-neutral-500">Credits</dt>
-            <dd className="font-medium text-neutral-900 tabular-nums">{bundleCredits}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-neutral-500">CRN</dt>
-            <dd>
-              <button
-                type="button"
-                onClick={handleCopyCrn}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#1a56db] px-2 py-1
-                           font-mono text-white"
-              >
-                {copied ? (
-                  "Copied!"
+        )}
+
+        {/* min-height (not max-height/scroll) — reserving the same minimum
+            space for both tabs means the common case (both tabs' content
+            fits within it) never changes the modal's height when switching
+            tabs, so the fixed top-anchor above stays visually centered with
+            zero shift. If content ever exceeds this (a very long GE list),
+            it's free to grow past it — that growth only extends the box
+            downward, since the anchor above is fixed, not recentered. */}
+        {activeTab === "details" && (
+          <dl className="mt-4 flex min-h-40 flex-col gap-2.5 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-neutral-500">Instructor</dt>
+              <dd className="text-right font-medium text-neutral-900">{section.instructor}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-neutral-500">Seats available</dt>
+              <dd className="font-medium text-neutral-900 tabular-nums">
+                {section.seatsAvailable} / {section.maximumEnrollment}
+              </dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              {/* This section's course may bundle a lecture + discussion/lab
+                  together (e.g. one CRN each) — the credit value usually only
+                  lives on one of them, so this is the BUNDLE's total, not just
+                  this one section's own (often 0) credit count. */}
+              <dt className="text-neutral-500">Credits</dt>
+              <dd className="font-medium text-neutral-900 tabular-nums">{bundleCredits}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-neutral-500">CRN</dt>
+              <dd>
+                <button
+                  type="button"
+                  onClick={handleCopyCrn}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#1a56db] px-2 py-1
+                             font-mono text-white"
+                >
+                  {copied ? (
+                    "Copied!"
+                  ) : (
+                    <>
+                      {section.crn}
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="h-3.5 w-3.5 text-accent-400"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        aria-hidden="true"
+                      >
+                        <rect x="7" y="7" width="10" height="10" rx="1.5" />
+                        <path d="M4.5 12.5v-8a1 1 0 0 1 1-1h8" strokeLinecap="round" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+              </dd>
+            </div>
+            <div>
+              <dt className="mb-1 text-neutral-500">Meeting times</dt>
+              <dd>
+                {section.meetings.length === 0 ? (
+                  <p className="text-neutral-700">Arranged/online — no fixed meeting time</p>
                 ) : (
-                  <>
-                    {section.crn}
-                    <svg
-                      viewBox="0 0 20 20"
-                      className="h-3.5 w-3.5 text-accent-400"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      aria-hidden="true"
-                    >
-                      <rect x="7" y="7" width="10" height="10" rx="1.5" />
-                      <path d="M4.5 12.5v-8a1 1 0 0 1 1-1h8" strokeLinecap="round" />
-                    </svg>
-                  </>
+                  <ul className="flex flex-col gap-1">
+                    {section.meetings.map((m, i) => (
+                      <li key={i} className="text-neutral-700 tabular-nums">
+                        {m.day} {formatClock(m.startTime)}–{formatClock(m.endTime)} · {m.building} {m.room}
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </button>
-            </dd>
-          </div>
-          <div>
-            <dt className="mb-1 text-neutral-500">Meeting times</dt>
+              </dd>
+            </div>
+          </dl>
+        )}
+
+        {activeTab === "fulfills" && geFulfillments.length > 0 && (
+          <dl className="mt-4 min-h-40 text-sm">
+            <dt className="sr-only">Fulfills</dt>
             <dd>
-              {section.meetings.length === 0 ? (
-                <p className="text-neutral-700">Arranged/online — no fixed meeting time</p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {section.meetings.map((m, i) => (
-                    <li key={i} className="text-neutral-700 tabular-nums">
-                      {m.day} {formatClock(m.startTime)}–{formatClock(m.endTime)} · {m.building} {m.room}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ul className="flex flex-col gap-1.5">
+                {geFulfillments.map((attr) => (
+                  <li key={attr} className="text-neutral-700">
+                    {attr}
+                  </li>
+                ))}
+              </ul>
             </dd>
-          </div>
-        </dl>
+          </dl>
+        )}
       </div>
     </div>,
     document.body,

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { getCourseBundles, getCourseCodesForSubject, getSubjects } from "./services/courseService.js";
+import { getCourseBundles, getCourseCodesForSubject, getSectionAttributes, getSubjects } from "./services/courseService.js";
 import { fetchTerms } from "./services/ucrClient.js";
 import { CandidateSchedule, Bundle } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
@@ -39,6 +39,23 @@ app.get("/subjects", async (req, res) => {
   } catch (err) {
     console.error(`Failed to fetch subjects for ${termCode}:`, err);
     res.status(502).json({ error: "Failed to load subjects from UCR. Please try again shortly." });
+  }
+});
+
+app.get("/section-attributes", async (req, res) => {
+  const crn = typeof req.query.crn === "string" ? req.query.crn : "";
+  const termCode = typeof req.query.term === "string" ? req.query.term : "";
+
+  if (!crn || !termCode) {
+    res.status(400).json({ error: "crn and term query params are required" });
+    return;
+  }
+
+  try {
+    res.json(await getSectionAttributes(crn, termCode));
+  } catch (err) {
+    console.error(`Failed to fetch section attributes for CRN ${crn} (${termCode}):`, err);
+    res.status(502).json({ error: "Failed to load section attributes from UCR. Please try again shortly." });
   }
 });
 

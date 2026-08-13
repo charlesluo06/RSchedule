@@ -15,6 +15,9 @@ const SEATS_TTL_SECONDS = 3 * 60; // 3 minutes
 const COURSE_CODES_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 // The list of subjects UCR offers essentially never changes term to term.
 const SUBJECTS_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+// GE/breadth fulfillments are fixed per section for the whole term — same
+// shelf life as the subjects list.
+const ATTRIBUTES_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 function bundlesKey(courseCode: string, termCode: string): string {
   return `bundles:${termCode}:${courseCode}`;
@@ -30,6 +33,10 @@ function courseCodesKey(subject: string, termCode: string): string {
 
 function subjectsKey(termCode: string): string {
   return `subjects:${termCode}`;
+}
+
+function attributesKey(crn: string, termCode: string): string {
+  return `attributes:${termCode}:${crn}`;
 }
 
 export async function getCachedBundles(courseCode: string, termCode: string): Promise<Bundle[] | null> {
@@ -70,6 +77,14 @@ export async function getCachedSubjects(termCode: string): Promise<Subject[] | n
 
 export async function setCachedSubjects(termCode: string, subjects: Subject[]): Promise<void> {
   await redis.set(subjectsKey(termCode), subjects, { ex: SUBJECTS_TTL_SECONDS });
+}
+
+export async function getCachedAttributes(crn: string, termCode: string): Promise<string[] | null> {
+  return redis.get<string[]>(attributesKey(crn, termCode));
+}
+
+export async function setCachedAttributes(crn: string, termCode: string, attributes: string[]): Promise<void> {
+  await redis.set(attributesKey(crn, termCode), attributes, { ex: ATTRIBUTES_TTL_SECONDS });
 }
 
 export function extractSeatsByCrn(bundles: Bundle[]): Record<string, number> {

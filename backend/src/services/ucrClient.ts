@@ -385,3 +385,37 @@ export async function fetchCourseCodesForSubject(subject: string, termCode: stri
     return [...seen.entries()].map(([code, title]) => ({ code, title }));
   });
 }
+
+// Real UCR attribute lines look like "BU-Hum - Addl Humanities  BBAH" (a GE
+// breadth requirement) or "Sustainability  SUST" (not a GE requirement) —
+// verified live, GE/breadth codes end in a code starting with "B" while
+// non-GE tags (course fees, sustainability) don't. Inferred from a small
+// sample; worth re-checking against more real courses if this ever looks wrong.
+function isGeAttribute(text: string): boolean {
+  const code = text.trim().split(/\s+/).pop() ?? "";
+  return code.startsWith("B");
+}
+
+/**
+ * Fetches the GE/breadth requirements a specific section fulfills (e.g.
+ * "HS-Hum - Literature"). UCR returns this as an HTML fragment, not JSON —
+ * one `<span class='attribute-text'>...</span>` per attribute, some course
+ * fees/tags mixed in alongside real GE designations.
+ */
+export async function fetchSectionAttributes(crn: string, termCode: string): Promise<string[]> {
+  return withSearchSession(termCode, async (jar) => {
+    const response = await fetch(
+      `${BASE}/searchResults/getSectionAttributes?term=${termCode}&courseReferenceNumber=${crn}`,
+      { headers: { "User-Agent": "Mozilla/5.0", Cookie: jar.header() } },
+    );
+    if (!response.ok) {
+      throw new Error(`UCR getSectionAttributes failed with status ${response.status}`);
+    }
+    const html = await response.text();
+    const matches = [...html.matchAll(/<span class='attribute-text'>([\s\S]*?)<\/span>/g)];
+    const attributes = matches
+      .map((m) => m[1].replace(/<br\/?>/g, "").trim())
+      .filter((text) => text.length > 0);
+    return attributes.filter(isGeAttribute);
+  });
+}

@@ -418,7 +418,11 @@ function App() {
               </div>
 
               <div className="mt-4">
-                <CalendarGrid selections={activeSchedule.selections} preferences={preferences} />
+                <CalendarGrid
+                  selections={activeSchedule.selections}
+                  preferences={preferences}
+                  termCode={selectedTermCode}
+                />
               </div>
             </>
           )}

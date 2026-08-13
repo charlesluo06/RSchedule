@@ -22,6 +22,7 @@ function useIsMobile(): boolean {
 interface CalendarGridProps {
   selections: Record<string, Bundle>;
   preferences: Preferences;
+  termCode: string;
 }
 
 interface SelectedSection {
@@ -31,7 +32,7 @@ interface SelectedSection {
   bundleCredits: number;
 }
 
-function CalendarGrid({ selections, preferences }: CalendarGridProps) {
+function CalendarGrid({ selections, preferences, termCode }: CalendarGridProps) {
   const [selectedSection, setSelectedSection] = useState<SelectedSection | null>(null);
   const isMobile = useIsMobile();
   const hourPx = isMobile ? MOBILE_HOUR_PX : HOUR_PX;
@@ -137,6 +138,7 @@ function CalendarGrid({ selections, preferences }: CalendarGridProps) {
           section={selectedSection.section}
           color={selectedSection.color}
           bundleCredits={selectedSection.bundleCredits}
+          termCode={termCode}
           onClose={() => setSelectedSection(null)}
         />
       )}

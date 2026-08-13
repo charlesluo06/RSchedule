@@ -1,12 +1,21 @@
 import { Bundle } from "../types.js";
-import { CourseCodeOption, Subject, fetchCourseBundles, fetchCourseCodesForSubject, fetchSubjects } from "./ucrClient.js";
+import {
+  CourseCodeOption,
+  Subject,
+  fetchCourseBundles,
+  fetchCourseCodesForSubject,
+  fetchSectionAttributes,
+  fetchSubjects,
+} from "./ucrClient.js";
 import {
   applySeats,
   extractSeatsByCrn,
+  getCachedAttributes,
   getCachedBundles,
   getCachedCourseCodes,
   getCachedSeats,
   getCachedSubjects,
+  setCachedAttributes,
   setCachedBundles,
   setCachedCourseCodes,
   setCachedSeats,
@@ -98,6 +107,20 @@ export async function getSubjects(termCode: string): Promise<Subject[]> {
     await setCachedSubjects(termCode, fresh);
   } catch (err) {
     console.warn(`Failed to write subjects cache for ${termCode}; continuing with fresh data.`, err);
+  }
+  return fresh;
+}
+
+/** Cache-first list of GE/breadth requirements a section fulfills. */
+export async function getSectionAttributes(crn: string, termCode: string): Promise<string[]> {
+  const cached = await getCachedAttributes(crn, termCode);
+  if (cached) return cached;
+
+  const fresh = await fetchSectionAttributes(crn, termCode);
+  try {
+    await setCachedAttributes(crn, termCode, fresh);
+  } catch (err) {
+    console.warn(`Failed to write attributes cache for CRN ${crn} (${termCode}); continuing with fresh data.`, err);
   }
   return fresh;
 }

@@ -223,7 +223,7 @@ function App() {
                   <span className="text-primary-700">Schedule</span>
                 </h1>
                 <p className="mt-3 text-lg text-neutral-600">
-                  Build a conflict-free UCR schedule in seconds — pick your courses, we handle the rest.
+                  Build a conflict-free UCR schedule in seconds.
                 </p>
               </div>
 

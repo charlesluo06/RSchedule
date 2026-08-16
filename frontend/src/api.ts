@@ -7,8 +7,20 @@ import type { Bundle, CourseCodeOption, GenerateResponse, Preferences, Subject, 
 // at the backend's actual URL — set via VITE_API_BASE_URL at build time.
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+// 429 is checked before the generic !response.ok fallback everywhere the
+// backend can return it (i.e. everywhere — the rate limiter applies
+// globally) so a throttled request surfaces a clear "slow down" message
+// instead of whichever generic "failed to load X" text that call happens to
+// throw otherwise.
+function assertNotRateLimited(response: Response) {
+  if (response.status === 429) {
+    throw new Error("You're making requests too quickly. Please wait a moment and try again.");
+  }
+}
+
 export async function getTerms(): Promise<Term[]> {
   const response = await fetch(`${API_BASE}/terms`);
+  assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load terms from UCR.");
   }
@@ -18,6 +30,7 @@ export async function getTerms(): Promise<Term[]> {
 export async function getSubjects(termCode: string): Promise<Subject[]> {
   const params = new URLSearchParams({ term: termCode });
   const response = await fetch(`${API_BASE}/subjects?${params}`);
+  assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load subjects.");
   }
@@ -27,6 +40,7 @@ export async function getSubjects(termCode: string): Promise<Subject[]> {
 export async function getCourseCodesForSubject(subject: string, termCode: string): Promise<CourseCodeOption[]> {
   const params = new URLSearchParams({ subject, term: termCode });
   const response = await fetch(`${API_BASE}/course-codes?${params}`);
+  assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load course codes.");
   }
@@ -36,6 +50,7 @@ export async function getCourseCodesForSubject(subject: string, termCode: string
 export async function getSectionAttributes(crn: string, termCode: string): Promise<string[]> {
   const params = new URLSearchParams({ crn, term: termCode });
   const response = await fetch(`${API_BASE}/section-attributes?${params}`);
+  assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load section attributes.");
   }
@@ -53,6 +68,7 @@ export async function postCourses(
     body: JSON.stringify({ courseCodes, termCode, forceRefresh }),
   });
 
+  assertNotRateLimited(response);
   if (response.status === 502) {
     // Matches the backend's own distinction: 502 specifically means UCR
     // itself (not our server) failed, so the message should say so.
@@ -67,7 +83,7 @@ export async function postCourses(
 // No network call to UCR happens here — this is pure computation on data
 // already fetched via postCourses, which is exactly why it's safe to call
 // repeatedly (e.g. every time the user tweaks a preference) without worrying
-// about UCR rate limits.
+// about UCR rate limits. It's still subject to our OWN rate limit, though.
 export async function postGenerate(
   courseBundles: Record<string, Bundle[]>,
   preferences: Preferences,
@@ -77,6 +93,7 @@ export async function postGenerate(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ courseBundles, preferences }),
   });
+  assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to generate schedules.");
   }

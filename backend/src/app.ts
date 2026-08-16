@@ -3,10 +3,15 @@ import express from "express";
 import cors from "cors";
 import { getCourseBundles, getCourseCodesForSubject, getSectionAttributes, getSubjects } from "./services/courseService.js";
 import { fetchTerms } from "./services/ucrClient.js";
+import { isWithinRateLimit } from "./services/rateLimit.js";
 import { CandidateSchedule, Bundle } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
 
 const app = express();
+// Vercel sits in front of this as a proxy — without trusting it, req.ip
+// would resolve to Vercel's own internal address for every request, making
+// every visitor look like the same client to the rate limiter below.
+app.set("trust proxy", true);
 // The frontend is deployed as a separate Vercel project (different origin),
 // so unlike local dev — where Vite's proxy makes requests same-origin — the
 // browser needs an explicit CORS allow to let those cross-origin calls through.
@@ -17,6 +22,25 @@ app.use(cors());
 // (e.g. STAT010, ~166kb of bundle data) can exceed that easily since each
 // bundle repeats full section objects across every combination.
 app.use(express.json({ limit: "5mb" }));
+
+// /health is exempt — it exists purely so an external pinger can keep the
+// serverless function warm, and it never touches UCR or Redis, so there's
+// no cost or abuse risk in leaving it unthrottled.
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+// Basic per-IP rate limit on everything else — protects against a scripted
+// or accidental traffic spike running up Redis/Vercel usage, or sending more
+// load at UCR's real registration system than organic usage ever would.
+app.use(async (req, res, next) => {
+  const allowed = await isWithinRateLimit(req.ip ?? "unknown");
+  if (!allowed) {
+    res.status(429).json({ error: "Too many requests. Please slow down and try again shortly." });
+    return;
+  }
+  next();
+});
 
 app.get("/terms", async (_req, res) => {
   try {

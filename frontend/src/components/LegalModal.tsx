@@ -79,6 +79,9 @@ function LegalModal({ onClose }: LegalModalProps) {
               your course registration.
             </p>
           </div>
+          <p className="border-t border-neutral-100 pt-3 text-xs text-neutral-500">
+            Made by Charles Luo.
+          </p>
         </div>
       </div>
     </div>,

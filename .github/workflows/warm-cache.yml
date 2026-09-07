@@ -1,0 +1,28 @@
+name: Warm autofill cache
+
+# 3am Pacific — genuinely off-peak, well before real students are awake and
+# searching, so the cache is already warm by the time real usage starts.
+# GitHub Actions cron always runs in UTC and doesn't shift for daylight
+# saving, so this drifts by an hour across the year: 10:00 UTC = 3am PDT
+# (summer) or 2am PST (winter) — close enough either way for the purpose.
+on:
+  schedule:
+    - cron: "0 10 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run warm-cache
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

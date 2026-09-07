@@ -94,9 +94,11 @@ function ClassDetailModal({ courseCode, section, color, bundleCredits, termCode,
       >
         <div className="flex items-start justify-between gap-3">
           <div>
+            {/* Matches CalendarBlock's pill now — solid vibrant fill,
+                white text — instead of the old pale bg/dark-text badge. */}
             <span
-              className="inline-flex rounded-md px-2 py-0.5 text-xs font-semibold"
-              style={{ backgroundColor: color.bg, color: color.text }}
+              className="inline-flex rounded-md px-2 py-0.5 text-xs font-semibold text-white"
+              style={{ backgroundColor: color.solid }}
             >
               {section.sectionType}
             </span>

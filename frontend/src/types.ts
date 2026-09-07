@@ -15,7 +15,7 @@ export interface Meeting {
 export interface Section {
   crn: string;
   courseCode: string;
-  sectionType: string; // "LEC" / "DIS" / "LAB"
+  sectionType: string; // "Lecture" / "Discussion" / "Laboratory" / "Seminar"
   linkId: string | null;
   meetings: Meeting[]; // empty = arranged/async, no fixed time
   seatsAvailable: number;

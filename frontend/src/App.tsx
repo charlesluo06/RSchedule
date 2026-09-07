@@ -14,7 +14,6 @@ import UnschedulableBadges from "./components/UnschedulableBadges";
 import BootScreen from "./components/BootScreen";
 import LegalModal from "./components/LegalModal";
 import { courseColorForIndex } from "./lib/colors";
-import { totalUnits } from "./lib/time";
 
 const PITCH_FEATURES = [
   "Live seat counts pulled straight from UCR",
@@ -54,10 +53,15 @@ function MiniCalendarPreview() {
               colorIndex === null ? (
                 <div key={j} className="h-6" />
               ) : (
+                // Toned down from the real calendar block's full-strength
+                // solid color (opacity, not the shared palette value) —
+                // this sits on the landing page next to the gold/navy
+                // brand chrome, where full vibrancy competes with it. The
+                // real calendar block elsewhere stays untouched.
                 <div
                   key={j}
-                  className="h-9 rounded-md"
-                  style={{ backgroundColor: courseColorForIndex(colorIndex).bg }}
+                  className="h-9 rounded-md opacity-60"
+                  style={{ backgroundColor: courseColorForIndex(colorIndex).solid }}
                 />
               ),
             )}
@@ -189,21 +193,12 @@ function App() {
 
   return (
     <div className="relative min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-4 sm:p-6">
-      {/* Purely decorative — soft brand-color corner washes (feathered
-          gradients, no hard shape edge) plus a faint dot grid, so the empty
-          space around the page content reads as intentional atmosphere
-          instead of unfinished emptiness or a shape that visually collides
-          with whatever's sitting on top of it. Shared by both setup and
-          results screens. */}
+      {/* Purely decorative — a faint dot grid, so the empty space around
+          the page content reads as intentional atmosphere instead of
+          unfinished emptiness. Shared by both setup and results screens.
+          (The blue/gold corner blobs that used to sit here got removed —
+          one too many decorative layers stacked at once.) */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 0% 0%, rgba(0,61,165,0.24), transparent 40%), " +
-              "radial-gradient(circle at 100% 100%, rgba(255,184,28,0.22), transparent 40%)",
-          }}
-        />
         <div
           className="absolute inset-0 opacity-[0.35]"
           style={{
@@ -392,17 +387,12 @@ function App() {
                   onChange={setActiveTab}
                 />
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  {/* Total units now lives on the left, in ScheduleStats,
+                      for both breakpoints — no more mobile/desktop split
+                      showing it in two different physical spots. This
+                      right-hand group is Refresh-only now. */}
                   <ScheduleStats schedule={activeSchedule} />
-                  {/* Desktop-only group on the right: Total units (moved out
-                      of ScheduleStats here — see the sm:hidden pairing
-                      there) sitting just left of "Refresh seat counts",
-                      instead of up in the title row (see the mobile version
-                      of the button, hidden here via sm:hidden, up there). */}
                   <div className="hidden shrink-0 items-center gap-4 sm:flex">
-                    <span className="text-sm text-neutral-700">
-                      <span className="font-medium text-primary-700">Total units:</span>{" "}
-                      {totalUnits(activeSchedule.selections)}
-                    </span>
                     <button
                       type="button"
                       onClick={handleRefreshSeats}

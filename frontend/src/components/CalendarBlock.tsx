@@ -6,13 +6,23 @@ import { formatClock } from "../lib/time";
 // threshold is about flagging "about to disappear," not "already gone."
 const LOW_SEATS_THRESHOLD = 5;
 
+// The underlying data (Section.sectionType) is the full word everywhere —
+// only the compact/mobile pill is tight enough on space to need
+// abbreviating, so that happens here, display-only, rather than shortening
+// the data itself for every consumer.
+const COMPACT_ABBREVIATIONS: Record<string, string> = {
+  Lecture: "LEC",
+  Discussion: "DIS",
+  Laboratory: "LAB",
+  Seminar: "SEM",
+};
+
 interface CalendarBlockProps {
   top: number; // px from the top of the day column
   height: number; // px tall
   color: CourseColor;
   courseCode: string;
   sectionType: string;
-  crn: string;
   room: string;
   startTime: string;
   endTime: string;
@@ -30,7 +40,6 @@ function CalendarBlock({
   color,
   courseCode,
   sectionType,
-  crn,
   room,
   startTime,
   endTime,
@@ -39,49 +48,60 @@ function CalendarBlock({
   onClick,
 }: CalendarBlockProps) {
   const isLowSeats = seatsAvailable <= LOW_SEATS_THRESHOLD;
+  const displaySectionType = compact ? COMPACT_ABBREVIATIONS[sectionType] ?? sectionType : sectionType;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`animate-fade-in absolute cursor-pointer overflow-hidden rounded-lg border text-left
-                 leading-tight transition-transform hover:z-10 hover:scale-[1.03] hover:shadow-md
-                 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 ${
-                   compact ? "inset-x-0.5 px-0.5 py-0.5 text-[9px]" : "inset-x-1 px-2 py-1 text-xs"
+      className={`animate-fade-in absolute cursor-pointer overflow-hidden rounded-lg border-2 border-black/10
+                 text-white leading-tight shadow-sm transition-transform hover:z-10 hover:scale-[1.03]
+                 hover:shadow-lg focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1
+                 focus-visible:outline-white ${
+                   compact
+                     ? "inset-x-0.5 px-0.5 py-0.5 text-center text-[9px]"
+                     : "inset-x-1 px-2 py-1 text-left text-xs"
                  }`}
       style={{
         top,
         height,
-        backgroundColor: color.bg,
-        borderColor: color.border,
-        color: color.text,
-        outlineColor: color.text,
+        backgroundColor: color.solid,
       }}
     >
+      {/* A thin white ring keeps this legible even against a hue close to
+          its own red (rose especially) now that blocks are solid-colored
+          instead of pale — on a pale background red always stood out on
+          its own, that's no longer guaranteed. */}
       {isLowSeats && !compact && (
         <span
           className="absolute top-1 right-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none
-                     text-white tabular-nums"
+                     text-white tabular-nums ring-2 ring-white"
           title={`Only ${seatsAvailable} seat${seatsAvailable === 1 ? "" : "s"} left`}
         >
           {seatsAvailable} left
         </span>
       )}
-      {/* Wraps onto a second line instead of truncating with an ellipsis —
-          the space between courseCode and sectionType is a natural word
-          break, so it never splits mid-word. The button's own
-          overflow-hidden clips anything beyond that (e.g. a third line on
-          a very short block) so it can never visually spill past the box. */}
-      <p className="wrap-break-word font-semibold">
-        {courseCode} {sectionType}
-      </p>
+      {/* The pill is now white-on-color (inverted from the block's own
+          solid background) instead of color-on-white, since the block
+          itself became the vibrant surface — a same-color pill would've
+          disappeared into it. flex-wrap lets the course code drop to its
+          own line on very narrow blocks instead of squeezing the pill. */}
+      <div className={`flex flex-wrap items-center gap-1 ${compact ? "justify-center" : ""}`}>
+        <span className="wrap-break-word font-semibold">{courseCode}</span>
+        <span
+          className="inline-flex shrink-0 self-center items-center justify-center rounded-full bg-white px-1
+                     py-0.5 text-[8px] font-bold leading-none"
+          style={{ color: color.solid }}
+        >
+          {displaySectionType}
+        </span>
+      </div>
       {!compact && (
         <>
-          <p className="tabular-nums opacity-80">
+          <p className="tabular-nums opacity-90">
             {formatClock(startTime)}–{formatClock(endTime)}
           </p>
-          <p className="opacity-80">{room}</p>
-          <p className="font-mono opacity-70">CRN {crn}</p>
+          <p className="opacity-90">{room}</p>
         </>
       )}
     </button>

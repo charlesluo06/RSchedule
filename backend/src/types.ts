@@ -13,7 +13,7 @@ export interface Meeting {
 export interface Section {
   crn: string;
   courseCode: string; // e.g. "MATH003"
-  sectionType: string; // "LEC" / "DIS" / "LAB"
+  sectionType: string; // "Lecture" / "Discussion" / "Laboratory" / "Seminar"
   linkId: string | null;
   meetings: Meeting[];
   seatsAvailable: number;

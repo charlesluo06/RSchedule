@@ -211,7 +211,7 @@ function normalizeSection(raw: RawSection): Section {
   return {
     crn: raw.courseReferenceNumber,
     courseCode: raw.subjectCourse,
-    sectionType: scheduleTypeAbbreviation(raw.scheduleTypeDescription),
+    sectionType: raw.scheduleTypeDescription,
     linkId: raw.linkIdentifier,
     meetings,
     seatsAvailable: raw.seatsAvailable,
@@ -219,16 +219,6 @@ function normalizeSection(raw: RawSection): Section {
     creditHours: raw.creditHours,
     instructor: primaryFaculty?.displayName ?? "Staff",
   };
-}
-
-function scheduleTypeAbbreviation(description: string): string {
-  const known: Record<string, string> = {
-    Lecture: "LEC",
-    Discussion: "DIS",
-    Laboratory: "LAB",
-    Seminar: "SEM",
-  };
-  return known[description] ?? description;
 }
 
 /**

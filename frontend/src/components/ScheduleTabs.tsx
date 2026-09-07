@@ -62,9 +62,9 @@ function ScheduleTabs({ schedules, activeTab, onChange }: ScheduleTabsProps) {
               key={index}
               type="button"
               onClick={() => onChange(index)}
-              className={`flex shrink-0 min-w-32 cursor-pointer flex-col gap-0.5 rounded-xl border px-3 py-2 text-left transition-colors sm:min-w-0 sm:flex-1 ${
+              className={`flex shrink-0 min-w-32 cursor-pointer flex-col gap-0.5 rounded-xl border-2 px-3 py-2 text-left transition-colors sm:min-w-0 sm:flex-1 ${
                 index === activeTab
-                  ? "border-accent-500 bg-accent-500/10"
+                  ? "border-accent-500 bg-accent-500/15 shadow-sm"
                   : "border-neutral-200 bg-white hover:bg-neutral-50"
               }`}
             >
@@ -74,7 +74,7 @@ function ScheduleTabs({ schedules, activeTab, onChange }: ScheduleTabsProps) {
               <span className="flex items-center gap-1.5 text-sm text-neutral-700 tabular-nums">
                 {formatDuration(schedule.gapMinutes)} gap
                 {schedule.fitsTimeRange && (
-                  <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
+                  <span className="rounded-full bg-green-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                     Fits window
                   </span>
                 )}

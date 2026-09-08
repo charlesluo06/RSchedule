@@ -165,7 +165,9 @@ const MAX_BUFFER_MINUTES = 120;
 // handing back a schedule that violates the exact hard constraint the user
 // asked for. That's worse than a rejected request, so this field gets real
 // validation where the rest of the route deliberately doesn't.
-function validateBusyBlocks(input: unknown): { ok: true; value: BusyBlock[] } | { ok: false; error: string } {
+// Exported so it can be unit-tested directly (see src/app.test.ts) without
+// spinning up the whole Express app or hitting a real network call.
+export function validateBusyBlocks(input: unknown): { ok: true; value: BusyBlock[] } | { ok: false; error: string } {
   if (input === undefined) return { ok: true, value: [] }; // omitted entirely = no busy blocks, backwards compatible
   if (!Array.isArray(input)) return { ok: false, error: "busyBlocks must be an array" };
   if (input.length > MAX_BUSY_BLOCKS) {

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import type { Bundle, Preferences, Section } from "../types";
+import type { Bundle, BusyBlock, Preferences, Section } from "../types";
 import { courseColorForIndex, type CourseColor } from "../lib/colors";
 import { DAY_ORDER, HOUR_PX, MOBILE_HOUR_PX, computeVisibleWindow, timeStringToMinutes } from "../lib/time";
 import CalendarBlock from "./CalendarBlock";
+import BusyCalendarBlock from "./BusyCalendarBlock";
 import ArrangedNote from "./ArrangedNote";
 import ClassDetailModal from "./ClassDetailModal";
 
@@ -23,6 +24,7 @@ interface CalendarGridProps {
   selections: Record<string, Bundle>;
   preferences: Preferences;
   termCode: string;
+  busyBlocks?: BusyBlock[];
 }
 
 interface SelectedSection {
@@ -32,7 +34,7 @@ interface SelectedSection {
   bundleCredits: number;
 }
 
-function CalendarGrid({ selections, preferences, termCode }: CalendarGridProps) {
+function CalendarGrid({ selections, preferences, termCode, busyBlocks = [] }: CalendarGridProps) {
   const [selectedSection, setSelectedSection] = useState<SelectedSection | null>(null);
   const isMobile = useIsMobile();
   const hourPx = isMobile ? MOBILE_HOUR_PX : HOUR_PX;
@@ -43,8 +45,10 @@ function CalendarGrid({ selections, preferences, termCode }: CalendarGridProps) 
   const sortedCourseCodes = Object.keys(selections).sort();
 
   // Only show the hours actually relevant to this schedule/preference,
-  // instead of always rendering the full 7am-10pm slider range.
-  const { startMin, endMin } = computeVisibleWindow(preferences.startTime, preferences.endTime, selections);
+  // instead of always rendering the full 7am-10pm slider range. Busy blocks
+  // fold into this union too, so an early/late one properly expands the grid
+  // instead of getting clipped at its edge.
+  const { startMin, endMin } = computeVisibleWindow(preferences.startTime, preferences.endTime, selections, busyBlocks);
   const startHour = startMin / 60;
   const totalHeight = ((endMin - startMin) / 60) * hourPx;
   const hours = Array.from({ length: (endMin - startMin) / 60 + 1 }, (_, i) => startHour + i);
@@ -93,6 +97,29 @@ function CalendarGrid({ selections, preferences, termCode }: CalendarGridProps) 
                   style={{ top: (h - startHour) * hourPx }}
                 />
               ))}
+
+              {/* Rendered before the class blocks so a class always visually
+                  sits on top of a busy block, even though the two can never
+                  actually overlap by construction (the scheduler enforces
+                  that as a hard constraint) — z-order should still favor the
+                  thing the user is actually scheduling. */}
+              {busyBlocks
+                .filter((block) => block.days.includes(day))
+                .map((block) => {
+                  const blockStartMin = timeStringToMinutes(block.startTime) - startMin;
+                  const blockEndMin = timeStringToMinutes(block.endTime) - startMin;
+                  return (
+                    <BusyCalendarBlock
+                      key={`${block.id}-${day}`}
+                      top={(blockStartMin / 60) * hourPx}
+                      height={((blockEndMin - blockStartMin) / 60) * hourPx}
+                      label={block.label}
+                      startTime={block.startTime}
+                      endTime={block.endTime}
+                      compact={isMobile}
+                    />
+                  );
+                })}
 
               {sortedCourseCodes.map((courseCode, courseIndex) => {
                 const bundle = selections[courseCode];

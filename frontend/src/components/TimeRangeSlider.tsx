@@ -4,13 +4,18 @@ interface TimeRangeSliderProps {
   startTime: string; // "HH:MM"
   endTime: string;
   onChange: (startTime: string, endTime: string) => void;
+  // Lets a non-preference use (e.g. a busy-block's own time range in
+  // BusyBlockModal) reuse this exact dual-handle control without the
+  // misleading default copy — defaults to today's text so both existing
+  // call sites are unaffected.
+  label?: string;
 }
 
 // A dual-handle slider isn't a native HTML element — this fakes it by
 // stacking two independent <input type="range"> elements on top of each
 // other in the same track, then using CSS so only their thumbs (not the
 // full track) can be clicked. Each one just controls one end of the range.
-function TimeRangeSlider({ startTime, endTime, onChange }: TimeRangeSliderProps) {
+function TimeRangeSlider({ startTime, endTime, onChange, label = "Preferred time range" }: TimeRangeSliderProps) {
   const startMin = timeStringToMinutes(startTime);
   const endMin = timeStringToMinutes(endTime);
 
@@ -29,7 +34,7 @@ function TimeRangeSlider({ startTime, endTime, onChange }: TimeRangeSliderProps)
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-primary-700">Preferred time range</span>
+        <span className="text-sm font-medium text-primary-700">{label}</span>
         <span className="text-sm text-neutral-700 tabular-nums">
           {formatClock(startTime)} – {formatClock(endTime)}
         </span>
@@ -54,7 +59,7 @@ function TimeRangeSlider({ startTime, endTime, onChange }: TimeRangeSliderProps)
           value={startMin}
           onChange={(e) => handleStartChange(Number(e.target.value))}
           className="range-thumb absolute inset-x-0 w-full appearance-none bg-transparent"
-          aria-label="Earliest preferred start time"
+          aria-label={`${label} — start`}
         />
         <input
           type="range"
@@ -64,7 +69,7 @@ function TimeRangeSlider({ startTime, endTime, onChange }: TimeRangeSliderProps)
           value={endMin}
           onChange={(e) => handleEndChange(Number(e.target.value))}
           className="range-thumb absolute inset-x-0 w-full appearance-none bg-transparent"
-          aria-label="Latest preferred end time"
+          aria-label={`${label} — end`}
         />
       </div>
     </div>

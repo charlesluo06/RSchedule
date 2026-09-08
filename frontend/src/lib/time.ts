@@ -1,4 +1,4 @@
-import type { Bundle } from "../types";
+import type { Bundle, BusyBlock } from "../types";
 
 // The calendar's fixed visible window (Step 6) — the slider is deliberately
 // bounded to the same range so it can never ask for a time the grid can't draw.
@@ -57,6 +57,7 @@ export function computeVisibleWindow(
   startTime: string,
   endTime: string,
   selections: Record<string, Bundle>,
+  busyBlocks: BusyBlock[] = [],
 ): { startMin: number; endMin: number } {
   const meetings = Object.values(selections)
     .flatMap((bundle) => bundle.sections)
@@ -64,8 +65,13 @@ export function computeVisibleWindow(
 
   const prefStart = timeStringToMinutes(startTime);
   const prefEnd = timeStringToMinutes(endTime);
-  const rawStart = Math.min(prefStart, ...meetings.map((m) => timeStringToMinutes(m.startTime)));
-  const rawEnd = Math.max(prefEnd, ...meetings.map((m) => timeStringToMinutes(m.endTime)));
+  // Busy blocks fold into the same union as class meetings — an early-morning
+  // work shift or a late practice should expand the visible grid exactly like
+  // a class at that hour would, not get silently clipped at the grid's edge.
+  const busyStarts = busyBlocks.map((b) => timeStringToMinutes(b.startTime));
+  const busyEnds = busyBlocks.map((b) => timeStringToMinutes(b.endTime));
+  const rawStart = Math.min(prefStart, ...meetings.map((m) => timeStringToMinutes(m.startTime)), ...busyStarts);
+  const rawEnd = Math.max(prefEnd, ...meetings.map((m) => timeStringToMinutes(m.endTime)), ...busyEnds);
 
   return {
     startMin: Math.floor(rawStart / 60) * 60,

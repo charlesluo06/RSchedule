@@ -1,4 +1,4 @@
-import { Bundle, CandidateSchedule, Meeting } from "../types.js";
+import { Bundle, BusyBlock, CandidateSchedule, Meeting } from "../types.js";
 
 export interface TimeRangePreference {
   startTime: string; // "HH:MM", earliest acceptable class start
@@ -8,6 +8,17 @@ export interface TimeRangePreference {
 function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
+}
+
+// Inverse of timeToMinutes, clamped to a single day (0-1440) — only ever
+// used to build a synthetic busy-block Meeting for internal conflict
+// checking, so it never needs to round-trip through a real class's actual
+// clock time.
+function minutesToTime(totalMinutes: number): string {
+  const clamped = Math.max(0, Math.min(24 * 60, totalMinutes));
+  const hours = Math.floor(clamped / 60);
+  const mins = clamped % 60;
+  return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
 function meetingsOverlap(a: Meeting, b: Meeting): boolean {
@@ -29,6 +40,36 @@ function bundleConflictsWithPlaced(bundle: Bundle, placedMeetings: Meeting[]): b
     }
   }
   return false;
+}
+
+// Expands each authored block (one label, a day *set*, one time range) into
+// N single-day Meeting-shaped records — the same precedent the app already
+// uses for an MWF class (3 separate Meetings, never one multi-day Meeting).
+// This is what lets busy blocks reuse meetingsOverlap/bundleConflictsWithPlaced
+// unchanged, with zero new overlap math.
+//
+// Each Meeting is padded by bufferMinutes AFTER it ends only, not before it
+// starts — nobody can walk from a shift straight into a lecture the instant
+// one ends, so the block's real 2:00-6:00 PM becomes an effective
+// 2:00-6:10 PM (at the default 10-minute buffer) purely for scheduling
+// purposes. The start side is left alone deliberately: getting TO a busy
+// block already has slack baked in from the class side, since UCR's own
+// back-to-back class scheduling (e.g. a lecture ending :50 past the hour,
+// the next slot starting on the hour) already leaves a gap before whatever
+// comes next — there's no equivalent protection on the far side of a busy
+// block, which is what actually needed padding. The calendar still renders
+// the block's real, un-padded times (see BusyCalendarBlock) — this only
+// ever affects what the scheduler is willing to place next to it.
+export function busyBlocksToMeetings(blocks: BusyBlock[]): Meeting[] {
+  return blocks.flatMap((block) =>
+    block.days.map((day) => ({
+      day,
+      startTime: block.startTime,
+      endTime: minutesToTime(timeToMinutes(block.endTime) + block.bufferMinutes),
+      building: "",
+      room: "",
+    })),
+  );
 }
 
 function allMeetings(selections: Map<string, Bundle>): Meeting[] {
@@ -144,7 +185,7 @@ function scheduleKey(selections: Map<string, Bundle>): string {
     .join(",");
 }
 
-export type UnschedulableReason = "not-offered" | "all-full";
+export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict";
 
 export interface GenerateResult {
   schedules: CandidateSchedule[];
@@ -190,24 +231,33 @@ export function generateSchedules(
   courseBundles: Record<string, Bundle[]>,
   preference: TimeRangePreference,
   gapPreference: GapPreference = "minimize",
+  busyBlocks: BusyBlock[] = [],
   maxResults = 3,
 ): GenerateResult {
-  const unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[] = [];
-  for (const [courseCode, bundles] of Object.entries(courseBundles)) {
-    if (bundles.length === 0) {
-      unschedulableCourses.push({ courseCode, reason: "not-offered" });
-    } else if (!bundles.some(hasOpenSeats)) {
-      unschedulableCourses.push({ courseCode, reason: "all-full" });
-    }
-  }
+  const busyMeetings = busyBlocksToMeetings(busyBlocks);
 
-  // Most-constrained-first: courses with fewer options get tried first,
-  // so branches that will fail get pruned as early as possible.
+  // Combines the old two-pass "figure out why a course is unschedulable"
+  // loop and "build the filtered course order" loop into one, now that
+  // there's a third reason (busy-conflict) to distinguish alongside the
+  // existing not-offered/all-full ones.
+  const unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[] = [];
   const courseOrder = Object.entries(courseBundles)
-    .map(([courseCode, bundles]) => ({
-      courseCode,
-      bundles: bundles.filter((b) => hasOpenSeats(b) && hasNoInternalConflict(b)),
-    }))
+    .map(([courseCode, bundles]) => {
+      const openBundles = bundles.filter(hasOpenSeats);
+      const validBundles = openBundles.filter(
+        (b) => hasNoInternalConflict(b) && !bundleConflictsWithPlaced(b, busyMeetings),
+      );
+      if (bundles.length === 0) {
+        unschedulableCourses.push({ courseCode, reason: "not-offered" });
+      } else if (openBundles.length === 0) {
+        unschedulableCourses.push({ courseCode, reason: "all-full" });
+      } else if (validBundles.length === 0) {
+        unschedulableCourses.push({ courseCode, reason: "busy-conflict" });
+      }
+      return { courseCode, bundles: validBundles };
+    })
+    // Most-constrained-first: courses with fewer options get tried first,
+    // so branches that will fail get pruned as early as possible.
     .sort((a, b) => a.bundles.length - b.bundles.length);
 
   // gapSign of 0 (for "none") makes the gap term drop out, so schedules are
@@ -229,7 +279,16 @@ export function generateSchedules(
   const seenKeys = new Set<string>();
   const selected: CandidateSchedule[] = [];
 
-  search(courseOrder, 0, new Map(), [], (liveSelections) => {
+  // Seeding placedMeetings with busyMeetings (instead of []) is the entire
+  // hard-constraint mechanism for busy blocks — search() and
+  // bundleConflictsWithPlaced() already treat "things already occupying
+  // time" as a flat Meeting[] with no other special-casing needed. Because
+  // this array is fixed for the whole tree, computeGapMinutes/allMeetings
+  // (which derive purely from `selections`, not from placedMeetings) never
+  // see busy blocks — gap math stays class-only, which is deliberate: fixing
+  // that a hole next to a work shift "shouldn't count" as free time is a
+  // separate ranking-semantics decision, not part of this constraint.
+  search(courseOrder, 0, new Map(), busyMeetings, (liveSelections) => {
     anyValidSchedule = true;
     const meetings = allMeetings(liveSelections);
     const fitsTimeRange = computeFitsTimeRange(meetings, preference);

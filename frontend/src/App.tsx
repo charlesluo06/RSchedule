@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { getTerms, postCourses, postGenerate } from "./api";
-import type { Bundle, GenerateResponse, Preferences, Term } from "./types";
+import type { Bundle, BusyBlock, GenerateResponse, Preferences, Term } from "./types";
 import TermDropdown from "./components/TermDropdown";
 import CourseChipInput from "./components/CourseChipInput";
 import TimeRangeSlider from "./components/TimeRangeSlider";
-import GapControl from "./components/GapControl";
+import BusyBlocksEditor from "./components/BusyBlocksEditor";
 import CalendarGrid from "./components/CalendarGrid";
 import ScheduleTabs from "./components/ScheduleTabs";
 import ScheduleStats from "./components/ScheduleStats";
@@ -86,10 +86,14 @@ function App() {
   const [preferences, setPreferences] = useState<Preferences>({
     startTime: "08:00",
     endTime: "20:00",
-    gapPreference: "minimize",
   });
   // Held so preference changes on the results view can re-call postGenerate
   // without re-fetching from UCR — only re-fetched when courses/term change.
+  // Kept separate from `preferences` (which mirrors the backend's
+  // TimeRangePreference contract exactly) rather than merged in — merging
+  // would ripple into PreferencesBar's and CalendarGrid's existing
+  // `preferences` prop contracts for no real benefit.
+  const [busyBlocks, setBusyBlocks] = useState<BusyBlock[]>([]);
   const [courseBundles, setCourseBundles] = useState<Record<string, Bundle[]> | null>(null);
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null);
   const [activeTab, setActiveTab] = useState(0);
@@ -109,12 +113,31 @@ function App() {
   useEffect(() => {
     getTerms()
       .then((fetchedTerms) => {
-        // Term codes are "YYYY" + a 2-digit term indicator (e.g. "202540" =
-        // Fall 2025) — older terms are still returned by UCR but aren't
-        // useful for planning a future schedule, so we only show 2026+.
-        const recentTerms = fetchedTerms.filter((term) => Number(term.code.slice(0, 4)) >= 2026);
+        // Term codes are "YYYY" + a 2-digit term indicator — 10/20/30/40 for
+        // Winter/Spring/Summer/Fall (e.g. "202540" = Fall 2025) — so the full
+        // numeric code already sorts in exact chronological order on its
+        // own. UCR's raw response happens to come back newest-first today,
+        // but nothing guarantees that stays true once a new term (e.g.
+        // Winter 2027) gets added on their end — sorting explicitly here
+        // means a newly-published term slots into the right place
+        // automatically instead of silently depending on UCR's own order.
+        // Older terms are still returned by UCR but aren't useful for
+        // planning a future schedule, so the dropdown only lists 2026+ —
+        // that list still legitimately includes past-but-recent terms like
+        // Winter/Spring/Summer 2026 (marked "(View Only)" by UCR) once the
+        // calendar catches up to them, which is fine to browse but wrong to
+        // default to.
+        const recentTerms = fetchedTerms
+          .filter((term) => Number(term.code.slice(0, 4)) >= 2026)
+          .sort((a, b) => Number(a.code) - Number(b.code));
         setTerms(recentTerms);
-        setSelectedTermCode(recentTerms[0]?.code ?? "");
+        // The default selection specifically needs the first CURRENT/FUTURE
+        // term (not "(View Only)") — otherwise, once Winter/Spring/Summer
+        // 2026 pass and start showing "(View Only)" themselves, the
+        // earliest item in the whole list becomes one of those past terms
+        // instead of the term actually open for planning (Fall 2026 today).
+        const defaultTerm = recentTerms.find((term) => !term.description.includes("View Only"));
+        setSelectedTermCode(defaultTerm?.code ?? recentTerms[0]?.code ?? "");
       })
       .catch(() => setTermsError("Couldn't load terms from UCR. Is the backend running?"))
       .finally(() => setTermsLoading(false));
@@ -130,7 +153,7 @@ function App() {
     postCourses(courseCodes, selectedTermCode)
       .then((bundles) => {
         setCourseBundles(bundles);
-        return postGenerate(bundles, preferences);
+        return postGenerate(bundles, preferences, busyBlocks);
       })
       .then((result) => {
         setGenerateResult(result);
@@ -150,7 +173,26 @@ function App() {
 
     setGenerateLoading(true);
     setGenerateError(null);
-    postGenerate(courseBundles, newPreferences)
+    postGenerate(courseBundles, newPreferences, busyBlocks)
+      .then((result) => {
+        setGenerateResult(result);
+        setActiveTab(0);
+      })
+      .catch((err: Error) => setGenerateError(err.message))
+      .finally(() => setGenerateLoading(false));
+  }
+
+  // Called from the results view's BusyBlocksEditor (now mounted inside
+  // PreferencesBar, same as the time-range/gap controls). Same shape as
+  // handlePreferencesChangeOnResults — reuses the already-fetched
+  // courseBundles and only re-calls /generate, never /courses.
+  function handleBusyBlocksChangeOnResults(newBusyBlocks: BusyBlock[]) {
+    setBusyBlocks(newBusyBlocks);
+    if (!courseBundles) return;
+
+    setGenerateLoading(true);
+    setGenerateError(null);
+    postGenerate(courseBundles, preferences, newBusyBlocks)
       .then((result) => {
         setGenerateResult(result);
         setActiveTab(0);
@@ -169,7 +211,7 @@ function App() {
     postCourses(courseCodes, selectedTermCode, true)
       .then((bundles) => {
         setCourseBundles(bundles);
-        return postGenerate(bundles, preferences);
+        return postGenerate(bundles, preferences, busyBlocks);
       })
       .then((result) => {
         setGenerateResult(result);
@@ -268,10 +310,7 @@ function App() {
           </div>
 
           <div className="mt-5">
-            <GapControl
-              value={preferences.gapPreference}
-              onChange={(gapPreference) => setPreferences((prev) => ({ ...prev, gapPreference }))}
-            />
+            <BusyBlocksEditor blocks={busyBlocks} onChange={setBusyBlocks} />
           </div>
 
           <button
@@ -369,7 +408,12 @@ function App() {
 
           {/* Scrolls away with the page — only the option tabs below need to
               stay put once you're deep into the calendar. */}
-          <PreferencesBar preferences={preferences} onChange={handlePreferencesChangeOnResults} />
+          <PreferencesBar
+            preferences={preferences}
+            onChange={handlePreferencesChangeOnResults}
+            busyBlocks={busyBlocks}
+            onBusyBlocksChange={handleBusyBlocksChangeOnResults}
+          />
 
           {showCalendar && activeSchedule && (
             <>
@@ -412,6 +456,7 @@ function App() {
                   selections={activeSchedule.selections}
                   preferences={preferences}
                   termCode={selectedTermCode}
+                  busyBlocks={busyBlocks}
                 />
               </div>
             </>

@@ -12,6 +12,7 @@ interface UnschedulableBadgesProps {
 const REASON_LABELS: Record<UnschedulableReason, string> = {
   "not-offered": "not offered this term",
   "all-full": "all sections full",
+  "busy-conflict": "overlaps your busy times",
 };
 
 function UnschedulableBadges({ courses }: UnschedulableBadgesProps) {

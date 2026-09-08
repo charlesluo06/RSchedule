@@ -1,4 +1,4 @@
-import type { Bundle, CourseCodeOption, GenerateResponse, Preferences, Subject, Term } from "./types";
+import type { Bundle, BusyBlock, CourseCodeOption, GenerateResponse, Preferences, Subject, Term } from "./types";
 
 // Locally, Vite's dev proxy forwards same-origin paths like "/terms" to the
 // backend on :3001 (see vite.config.ts), so this stays "" and requests never
@@ -87,11 +87,12 @@ export async function postCourses(
 export async function postGenerate(
   courseBundles: Record<string, Bundle[]>,
   preferences: Preferences,
+  busyBlocks: BusyBlock[] = [],
 ): Promise<GenerateResponse> {
   const response = await fetch(`${API_BASE}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ courseBundles, preferences }),
+    body: JSON.stringify({ courseBundles, preferences, busyBlocks }),
   });
   assertNotRateLimited(response);
   if (!response.ok) {

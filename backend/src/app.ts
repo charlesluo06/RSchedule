@@ -4,7 +4,7 @@ import cors from "cors";
 import { getCourseBundles, getCourseCodesForSubject, getSectionAttributes, getSubjects } from "./services/courseService.js";
 import { fetchTerms } from "./services/ucrClient.js";
 import { isWithinRateLimit } from "./services/rateLimit.js";
-import { CandidateSchedule, Bundle } from "./types.js";
+import { CandidateSchedule, Bundle, BusyBlock, DayOfWeek } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
 
 const app = express();
@@ -137,6 +137,79 @@ app.post("/courses", async (req, res) => {
 interface GenerateRequestBody {
   courseBundles: Record<string, Bundle[]>;
   preferences: TimeRangePreference & { gapPreference?: GapPreference };
+  // Left untyped as BusyBlock here on purpose — it's client-supplied JSON,
+  // not something this codebase produced, so it gets validated below before
+  // ever being trusted as a real BusyBlock[].
+  busyBlocks?: unknown;
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const VALID_DAYS = new Set<DayOfWeek>(["Mon", "Tue", "Wed", "Thu", "Fri"]);
+const MAX_BUSY_BLOCKS = 20;
+// Matches UCR's own back-to-back class scheduling (e.g. a 9:00-9:50 lecture
+// immediately followed by a 10:00 one) — nobody can walk from a shift
+// straight into a lecture the instant one ends, so this is the default
+// padding applied after a busy block ends (not before it starts — see
+// BusyBlock's own doc comment in types.ts for why) before it's checked
+// against class times. Capped at 2 hours — beyond that a real commute is
+// better modeled as a wider busy block, not a "buffer."
+const DEFAULT_BUFFER_MINUTES = 10;
+const MAX_BUFFER_MINUTES = 120;
+
+// Unlike the rest of /generate's input — courseBundles is our own /courses
+// output echoed back, and startTime/endTime come from a slider bounded to
+// valid values — busy blocks are the first genuinely free-form user-authored
+// structure this route accepts. A malformed one fails silently rather than
+// loudly: timeToMinutes("garbage") is NaN, every comparison in
+// meetingsOverlap comes back false, and the block is quietly ignored,
+// handing back a schedule that violates the exact hard constraint the user
+// asked for. That's worse than a rejected request, so this field gets real
+// validation where the rest of the route deliberately doesn't.
+function validateBusyBlocks(input: unknown): { ok: true; value: BusyBlock[] } | { ok: false; error: string } {
+  if (input === undefined) return { ok: true, value: [] }; // omitted entirely = no busy blocks, backwards compatible
+  if (!Array.isArray(input)) return { ok: false, error: "busyBlocks must be an array" };
+  if (input.length > MAX_BUSY_BLOCKS) {
+    return { ok: false, error: `busyBlocks cannot exceed ${MAX_BUSY_BLOCKS} entries` };
+  }
+
+  const value: BusyBlock[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object") return { ok: false, error: "each busy block must be an object" };
+    const { label, days, startTime, endTime, bufferMinutes: rawBuffer } = raw as Record<string, unknown>;
+
+    if (!Array.isArray(days) || days.length === 0 || !days.every((d) => VALID_DAYS.has(d as DayOfWeek))) {
+      return { ok: false, error: "each busy block needs a non-empty days array of Mon/Tue/Wed/Thu/Fri" };
+    }
+    if (typeof startTime !== "string" || !HHMM_RE.test(startTime)) {
+      return { ok: false, error: "busy block startTime must be an HH:MM string" };
+    }
+    if (typeof endTime !== "string" || !HHMM_RE.test(endTime)) {
+      return { ok: false, error: "busy block endTime must be an HH:MM string" };
+    }
+    // Safe as a plain string comparison since both sides are already
+    // confirmed zero-padded "HH:MM" by the regex above.
+    if (startTime >= endTime) {
+      return { ok: false, error: "busy block startTime must be before endTime" };
+    }
+    const bufferMinutes = rawBuffer === undefined ? DEFAULT_BUFFER_MINUTES : rawBuffer;
+    if (
+      typeof bufferMinutes !== "number" ||
+      !Number.isInteger(bufferMinutes) ||
+      bufferMinutes < 0 ||
+      bufferMinutes > MAX_BUFFER_MINUTES
+    ) {
+      return { ok: false, error: `busy block bufferMinutes must be an integer from 0 to ${MAX_BUFFER_MINUTES}` };
+    }
+
+    value.push({
+      label: typeof label === "string" ? label.slice(0, 40) : "",
+      days: [...new Set(days as DayOfWeek[])],
+      startTime,
+      endTime,
+      bufferMinutes,
+    });
+  }
+  return { ok: true, value };
 }
 
 // A CandidateSchedule's `selections` is a Map, which JSON.stringify can't
@@ -151,15 +224,22 @@ function serializeSchedule(schedule: CandidateSchedule) {
 }
 
 app.post("/generate", (req, res) => {
-  const { courseBundles, preferences } = req.body as GenerateRequestBody;
+  const { courseBundles, preferences, busyBlocks: rawBusyBlocks } = req.body as GenerateRequestBody;
 
   if (!courseBundles || Object.keys(courseBundles).length === 0 || !preferences?.startTime || !preferences?.endTime) {
     res.status(400).json({ error: "courseBundles and preferences (startTime, endTime) are required" });
     return;
   }
 
+  const busyBlocksResult = validateBusyBlocks(rawBusyBlocks);
+  if (!busyBlocksResult.ok) {
+    res.status(400).json({ error: busyBlocksResult.error });
+    return;
+  }
+  const busyBlocks = busyBlocksResult.value;
+
   const { startTime, endTime, gapPreference = "minimize" } = preferences;
-  const result = generateSchedules(courseBundles, { startTime, endTime }, gapPreference);
+  const result = generateSchedules(courseBundles, { startTime, endTime }, gapPreference, busyBlocks);
 
   let message: string | undefined;
   if (!result.anyValidSchedule) {
@@ -168,10 +248,14 @@ app.post("/generate", (req, res) => {
         .map(({ courseCode, reason }) =>
           reason === "not-offered"
             ? `${courseCode} has no sections offered this term`
-            : `${courseCode}'s sections are all full`,
+            : reason === "all-full"
+              ? `${courseCode}'s sections are all full`
+              : `${courseCode} only has sections that overlap your busy times`,
         )
         .join("; ");
       message = `No schedule is possible: ${details}.`;
+    } else if (busyBlocks.length > 0) {
+      message = "No conflict-free schedule is possible around your busy times — try shortening or removing one.";
     } else {
       message =
         "No conflict-free schedule is possible — these courses' meeting times don't leave any way to avoid overlaps.";

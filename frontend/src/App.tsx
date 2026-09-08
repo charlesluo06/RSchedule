@@ -403,26 +403,40 @@ function App() {
           className="animate-fade-in relative w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-4 shadow-lg
                      backdrop-blur-md ring-1 ring-black/5 sm:p-6"
         >
-          <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              onClick={() => setStep("setup")}
-              className="cursor-pointer text-2xl font-semibold tracking-tight opacity-100 transition-opacity hover:opacity-70"
-            >
-              <span className="text-accent-500">R</span>
-              <span className="text-primary-700">Schedule</span>
-            </button>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {/* On desktop this moves down to share a row with "Total gap"
-                  instead — see the sm:hidden/hidden-sm:inline-flex pairing
-                  below with ScheduleStats. */}
+          <div className="mb-4 flex flex-col gap-3">
+            {/* RSchedule + Edit courses always share one row (justify-between
+                naturally puts them at opposite ends, mobile or desktop) —
+                this used to be nested inside the same wrapping group as
+                Refresh/Download below, which is why it drifted onto its own
+                line on narrow screens. */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setStep("setup")}
+                className="cursor-pointer text-2xl font-semibold tracking-tight opacity-100 transition-opacity hover:opacity-70"
+              >
+                <span className="text-accent-500">R</span>
+                <span className="text-primary-700">Schedule</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("setup")}
+                className="cursor-pointer text-sm font-medium text-primary-700 hover:underline"
+              >
+                ← Edit courses
+              </button>
+            </div>
+            {/* Refresh seats + Schedule (download), on their own row, mobile
+                only — desktop shows this same pair together in the sticky
+                ScheduleStats bar instead (see the sm:flex group below). */}
+            <div className="flex items-center gap-3 sm:hidden">
               <button
                 type="button"
                 onClick={handleRefreshSeats}
                 disabled={generateLoading}
                 className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
                            text-neutral-700 transition-colors hover:bg-neutral-100
-                           disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
+                           disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {generateLoading ? "Refreshing…" : "↻ Refresh seats"}
               </button>
@@ -433,19 +447,12 @@ function App() {
                   disabled={downloadingSchedule}
                   className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-300
                              px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100
-                             disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
+                             disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <img src="/download.svg" alt="" className="h-4 w-4" />
                   {downloadingSchedule ? "Downloading…" : "Schedule"}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setStep("setup")}
-                className="cursor-pointer text-sm font-medium text-primary-700 hover:underline"
-              >
-                ← Edit courses
-              </button>
             </div>
           </div>
 

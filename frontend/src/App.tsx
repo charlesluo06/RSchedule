@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toPng } from "html-to-image";
 import { getTerms, postCourses, postGenerate } from "./api";
 import type { Bundle, BusyBlock, GenerateResponse, Preferences, Term } from "./types";
 import TermDropdown from "./components/TermDropdown";
@@ -101,6 +102,10 @@ function App() {
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [legalModalOpen, setLegalModalOpen] = useState(false);
+  // Points at CalendarGrid's own root div (just the hour axis + day
+  // columns, not ArrangedNote or the modal) — see handleDownloadSchedule.
+  const calendarGridRef = useRef<HTMLDivElement>(null);
+  const [downloadingSchedule, setDownloadingSchedule] = useState(false);
 
   // Matches the .animate-logo-fill CSS duration (0.7s) so the boot screen
   // never disappears mid-animation on a fast connection.
@@ -219,6 +224,42 @@ function App() {
       })
       .catch((err: Error) => setGenerateError(err.message))
       .finally(() => setGenerateLoading(false));
+  }
+
+  // Renders just CalendarGrid's own root div (hour axis + day columns — see
+  // the gridRef prop) to a PNG and triggers a browser download. Only ever
+  // captures the currently active tab, matching what's actually on screen
+  // when the button is clicked — switching tabs first downloads that one.
+  async function handleDownloadSchedule() {
+    if (!calendarGridRef.current) return;
+    setDownloadingSchedule(true);
+    try {
+      // pixelRatio 1.5 — sharper than 1x without paying full retina (2x)
+      // cost; each step down in ratio is a quadratic drop in pixels
+      // actually rasterized. backgroundColor is explicit because the grid
+      // itself has no opaque background in the live page otherwise (it
+      // sits on the results card's translucent background). skipFonts
+      // avoids html-to-image's default behavior of re-fetching and
+      // base64-inlining every @font-face resource (Inter ships several
+      // weights × formats) purely to make the output self-contained — the
+      // font is already loaded and applied on the live page, so skipping
+      // that step doesn't change how the text actually renders, it just
+      // cuts out a slow, unnecessary round-trip before capturing.
+      const dataUrl = await toPng(calendarGridRef.current, {
+        backgroundColor: "#ffffff",
+        pixelRatio: 1.5,
+        skipFonts: true,
+      });
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `rschedule-option-${activeTab + 1}.png`;
+      link.click();
+    } catch (err) {
+      console.error("Failed to generate schedule image:", err);
+      setGenerateError("Couldn't generate the schedule image. Please try again.");
+    } finally {
+      setDownloadingSchedule(false);
+    }
   }
 
   const canGenerate = courseCodes.length > 0 && selectedTermCode !== "" && !generateLoading;
@@ -383,8 +424,21 @@ function App() {
                            text-neutral-700 transition-colors hover:bg-neutral-100
                            disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
               >
-                {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
+                {generateLoading ? "Refreshing…" : "↻ Refresh seats"}
               </button>
+              {showCalendar && activeSchedule && (
+                <button
+                  type="button"
+                  onClick={handleDownloadSchedule}
+                  disabled={downloadingSchedule}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-300
+                             px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100
+                             disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
+                >
+                  <img src="/download.svg" alt="" className="h-4 w-4" />
+                  {downloadingSchedule ? "Downloading…" : "Schedule"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setStep("setup")}
@@ -434,9 +488,20 @@ function App() {
                   {/* Total units now lives on the left, in ScheduleStats,
                       for both breakpoints — no more mobile/desktop split
                       showing it in two different physical spots. This
-                      right-hand group is Refresh-only now. */}
+                      right-hand group is Refresh/Download now. */}
                   <ScheduleStats schedule={activeSchedule} />
                   <div className="hidden shrink-0 items-center gap-4 sm:flex">
+                    <button
+                      type="button"
+                      onClick={handleDownloadSchedule}
+                      disabled={downloadingSchedule}
+                      className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-300
+                                 px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100
+                                 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <img src="/download.svg" alt="" className="h-4 w-4" />
+                      {downloadingSchedule ? "Downloading…" : "Schedule"}
+                    </button>
                     <button
                       type="button"
                       onClick={handleRefreshSeats}
@@ -445,7 +510,7 @@ function App() {
                                  text-neutral-700 transition-colors hover:bg-neutral-100
                                  disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {generateLoading ? "Refreshing…" : "↻ Refresh seat counts"}
+                      {generateLoading ? "Refreshing…" : "↻ Refresh seats"}
                     </button>
                   </div>
                 </div>
@@ -457,6 +522,7 @@ function App() {
                   preferences={preferences}
                   termCode={selectedTermCode}
                   busyBlocks={busyBlocks}
+                  gridRef={calendarGridRef}
                 />
               </div>
             </>

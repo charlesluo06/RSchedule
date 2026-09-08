@@ -25,6 +25,11 @@ interface CalendarGridProps {
   preferences: Preferences;
   termCode: string;
   busyBlocks?: BusyBlock[];
+  // Lets App.tsx grab a handle on just the grid itself (hour axis + day
+  // columns) for the "Download schedule" feature — deliberately excludes
+  // ArrangedNote and the click-to-view modal below it, since those aren't
+  // part of "the calendar" a screenshot of it should capture.
+  gridRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 interface SelectedSection {
@@ -34,7 +39,7 @@ interface SelectedSection {
   bundleCredits: number;
 }
 
-function CalendarGrid({ selections, preferences, termCode, busyBlocks = [] }: CalendarGridProps) {
+function CalendarGrid({ selections, preferences, termCode, busyBlocks = [], gridRef }: CalendarGridProps) {
   const [selectedSection, setSelectedSection] = useState<SelectedSection | null>(null);
   const isMobile = useIsMobile();
   const hourPx = isMobile ? MOBILE_HOUR_PX : HOUR_PX;
@@ -69,7 +74,7 @@ function CalendarGrid({ selections, preferences, termCode, busyBlocks = [] }: Ca
           week view), with a much shorter hourPx and compact CalendarBlocks
           (title only) making that legible instead of scrolling sideways to
           read one day at a time. */}
-      <div className="flex">
+      <div ref={gridRef} className="flex bg-white">
         {/* Hour-axis gutter */}
         <div className="relative w-8 shrink-0 sm:w-12" style={{ height: totalHeight }}>
           {hours.map((h) => (

@@ -311,9 +311,20 @@ export async function fetchCourseBundles(courseCode: string, termCode: string): 
       throw new Error(`UCR search failed with status ${response.status}`);
     }
 
-    const body = (await response.json()) as { success: boolean; data: RawSection[] };
+    const body = (await response.json()) as { success: boolean; data: RawSection[] | null };
     if (!body.success) {
       throw new Error("UCR search reported failure");
+    }
+    // Confirmed live: UCR occasionally answers success:true with data:null
+    // instead of an actual error status — a transient hiccup on their end,
+    // not something tied to any request we send (reproduced the exact same
+    // request immediately after and got valid data back). Without this
+    // check it surfaces as a bare "Cannot read properties of null (reading
+    // 'map')" a few frames up, which reads like a bug in our own code
+    // rather than "UCR sent nothing this time" — callers already catch and
+    // fall back to cache regardless, this only makes the log say why.
+    if (body.data === null) {
+      throw new Error("UCR search returned no data (transient — retrying later should succeed)");
     }
 
     return body.data.map(normalizeSection);

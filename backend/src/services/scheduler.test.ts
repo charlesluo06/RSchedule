@@ -250,4 +250,45 @@ describe("applyArcConsistency", () => {
     const result = applyArcConsistency(courseOrder);
     expect(result.every((c) => c.bundles.length === 1)).toBe(true);
   });
+
+  // Regression test for a real bug: a course that's already unschedulable
+  // for an unrelated reason (all-full, not-offered, busy-conflict) arrives
+  // here with an EMPTY bundle list. Without a guard, "does this bundle have
+  // a compatible partner in the other course" is vacuously false when the
+  // other course's list is empty — wrongly wiping out every other selected
+  // course's options too, even ones that never actually conflict with each
+  // other. Caught live: ECON005 (all-full) + CS166 + CS153, where CS166 and
+  // CS153 schedule together fine on their own, but were both incorrectly
+  // flagged as conflicting with "your other selected courses" the moment
+  // ECON005 (unrelated, already-full) was in the mix.
+  it("doesn't let an already-empty (e.g. all-full) course's domain wipe out unrelated courses", () => {
+    const courseOrder = [
+      { courseCode: "ECON005", bundles: [] }, // already emptied by the all-full filter upstream
+      { courseCode: "CS166", bundles: [bundleFor("CS166", "1", "Mon", "09:00", "09:50")] },
+      { courseCode: "CS153", bundles: [bundleFor("CS153", "2", "Tue", "10:00", "10:50")] },
+    ];
+
+    const result = applyArcConsistency(courseOrder);
+    expect(result.find((c) => c.courseCode === "CS166")!.bundles).toHaveLength(1);
+    expect(result.find((c) => c.courseCode === "CS153")!.bundles).toHaveLength(1);
+  });
+});
+
+describe("generateSchedules — an all-full course doesn't falsely flag unrelated courses", () => {
+  it("only reports the actually-full course, not the two that schedule together fine", () => {
+    const full = bundleFor("ECON005", "1", "Mon", "09:00", "09:50");
+    full.sections[0].seatsAvailable = 0; // genuinely all-full, not just a normal section
+
+    const courseBundles: Record<string, Bundle[]> = {
+      ECON005: [full],
+      CS166: [bundleFor("CS166", "2", "Mon", "09:00", "09:50")],
+      CS153: [bundleFor("CS153", "3", "Tue", "10:00", "10:50")],
+    };
+
+    const result = generateSchedules(courseBundles, { startTime: "07:00", endTime: "22:00" });
+
+    expect(result.unschedulableCourses).toEqual([{ courseCode: "ECON005", reason: "all-full" }]);
+    expect(result.unschedulableCourses.find((u) => u.courseCode === "CS166")).toBeUndefined();
+    expect(result.unschedulableCourses.find((u) => u.courseCode === "CS153")).toBeUndefined();
+  });
 });

@@ -258,17 +258,33 @@ export function applyArcConsistency(
   let changed = true;
   while (changed) {
     changed = false;
+    // Snapshot every course's bundle list at the START of this sweep, and
+    // compute every course's survivors against that same snapshot — never
+    // against another course's list as it's mid-update THIS sweep. Without
+    // this, results become order-dependent: whichever course happens to be
+    // checked first would "win" and empty the other one out, instead of
+    // both correctly ending up empty together when they're genuinely
+    // mutually exclusive (e.g. two courses whose only remaining options
+    // directly conflict with each other — both have zero real options, not
+    // just one of them, and which one "goes first" shouldn't decide that).
+    // It's also what makes the empty-domain guard below actually correct:
+    // a course already empty from an external reason (all-full,
+    // not-offered, busy-conflict) reads as empty in the snapshot no matter
+    // what, so it can never wrongly carry "incompatible with everything"
+    // information to an unrelated course.
+    const snapshot = domains.map((d) => d.bundles);
+
     for (let i = 0; i < domains.length; i++) {
+      let survivors = snapshot[i];
       for (let j = 0; j < domains.length; j++) {
         if (i === j) continue;
-        const other = domains[j];
-        const survivors = domains[i].bundles.filter((bundle) =>
-          other.bundles.some((otherBundle) => bundlesCompatible(bundle, otherBundle)),
-        );
-        if (survivors.length !== domains[i].bundles.length) {
-          domains[i].bundles = survivors;
-          changed = true;
-        }
+        const otherBundles = snapshot[j];
+        if (otherBundles.length === 0) continue; // empty domain = no constraint info, not "conflicts with everything"
+        survivors = survivors.filter((bundle) => otherBundles.some((otherBundle) => bundlesCompatible(bundle, otherBundle)));
+      }
+      if (survivors.length !== domains[i].bundles.length) {
+        domains[i].bundles = survivors;
+        changed = true;
       }
     }
   }

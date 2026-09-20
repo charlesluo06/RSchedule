@@ -185,7 +185,7 @@ function scheduleKey(selections: Map<string, Bundle>): string {
     .join(",");
 }
 
-export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict";
+export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict" | "course-conflict";
 
 export interface GenerateResult {
   schedules: CandidateSchedule[];
@@ -227,6 +227,55 @@ function hasNoInternalConflict(bundle: Bundle): boolean {
   return true;
 }
 
+function bundlesCompatible(a: Bundle, b: Bundle): boolean {
+  const aMeetings = a.sections.flatMap((s) => s.meetings);
+  const bMeetings = b.sections.flatMap((s) => s.meetings);
+  return !aMeetings.some((m1) => bMeetings.some((m2) => meetingsOverlap(m1, m2)));
+}
+
+// Arc-consistency preprocessing: removes any bundle that can NEVER appear in
+// a valid schedule — one that conflicts with every single option of some
+// other course — before the exponential backtracking search even starts.
+// This is exact and lossless (a removed bundle genuinely has zero chance of
+// ever being used, regardless of what else gets picked), so it can only
+// shrink the search space, never change which schedules are findable —
+// verified against the same brute-force differential test that proves the
+// search itself is exhaustive (see scheduler.exhaustiveness.test.ts).
+//
+// Runs as repeated full sweeps over every course pair until a full sweep
+// removes nothing (a fixed point) — not the textbook AC-3 worklist queue,
+// which only re-checks pairs actually affected by the last removal. That's
+// a real optimization AC-3 has that this skips, but it only changes how
+// many times cheap, polynomial preprocessing work gets redone — it doesn't
+// change correctness or the end result, and this preprocessing is already
+// negligible next to the exponential search it's protecting against, so
+// the simpler repeated-sweep version isn't worth the extra bookkeeping.
+export function applyArcConsistency(
+  courseOrder: { courseCode: string; bundles: Bundle[] }[],
+): { courseCode: string; bundles: Bundle[] }[] {
+  const domains = courseOrder.map((c) => ({ courseCode: c.courseCode, bundles: [...c.bundles] }));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < domains.length; i++) {
+      for (let j = 0; j < domains.length; j++) {
+        if (i === j) continue;
+        const other = domains[j];
+        const survivors = domains[i].bundles.filter((bundle) =>
+          other.bundles.some((otherBundle) => bundlesCompatible(bundle, otherBundle)),
+        );
+        if (survivors.length !== domains[i].bundles.length) {
+          domains[i].bundles = survivors;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return domains;
+}
+
 export function generateSchedules(
   courseBundles: Record<string, Bundle[]>,
   preference: TimeRangePreference,
@@ -241,24 +290,41 @@ export function generateSchedules(
   // there's a third reason (busy-conflict) to distinguish alongside the
   // existing not-offered/all-full ones.
   const unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[] = [];
-  const courseOrder = Object.entries(courseBundles)
-    .map(([courseCode, bundles]) => {
-      const openBundles = bundles.filter(hasOpenSeats);
-      const validBundles = openBundles.filter(
-        (b) => hasNoInternalConflict(b) && !bundleConflictsWithPlaced(b, busyMeetings),
-      );
-      if (bundles.length === 0) {
-        unschedulableCourses.push({ courseCode, reason: "not-offered" });
-      } else if (openBundles.length === 0) {
-        unschedulableCourses.push({ courseCode, reason: "all-full" });
-      } else if (validBundles.length === 0) {
-        unschedulableCourses.push({ courseCode, reason: "busy-conflict" });
-      }
-      return { courseCode, bundles: validBundles };
-    })
-    // Most-constrained-first: courses with fewer options get tried first,
-    // so branches that will fail get pruned as early as possible.
-    .sort((a, b) => a.bundles.length - b.bundles.length);
+  const preArcConsistency = Object.entries(courseBundles).map(([courseCode, bundles]) => {
+    const openBundles = bundles.filter(hasOpenSeats);
+    const validBundles = openBundles.filter(
+      (b) => hasNoInternalConflict(b) && !bundleConflictsWithPlaced(b, busyMeetings),
+    );
+    if (bundles.length === 0) {
+      unschedulableCourses.push({ courseCode, reason: "not-offered" });
+    } else if (openBundles.length === 0) {
+      unschedulableCourses.push({ courseCode, reason: "all-full" });
+    } else if (validBundles.length === 0) {
+      unschedulableCourses.push({ courseCode, reason: "busy-conflict" });
+    }
+    return { courseCode, bundles: validBundles };
+  });
+
+  // Arc-consistency runs on the already-cleaned bundle lists above (no
+  // point checking pairwise compatibility against a closed/self-conflicting
+  // section that was already going to be filtered out) — it can only
+  // shrink these lists further, never add back what's already gone. Sorted
+  // most-constrained-first AFTER pruning, so the ordering heuristic reacts
+  // to the real, post-pruning option counts rather than the pre-pruning ones.
+  const courseOrder = applyArcConsistency(preArcConsistency).sort(
+    (a, b) => a.bundles.length - b.bundles.length,
+  );
+
+  // A course that had valid options on its own can still end up with zero
+  // after arc-consistency — that means every one of its sections is
+  // mutually incompatible with some other SELECTED course (not a busy
+  // block, already covered by "busy-conflict" above), a distinct and more
+  // informative reason than the generic "no schedule possible" message.
+  for (const { courseCode, bundles } of courseOrder) {
+    if (bundles.length === 0 && !unschedulableCourses.some((u) => u.courseCode === courseCode)) {
+      unschedulableCourses.push({ courseCode, reason: "course-conflict" });
+    }
+  }
 
   // gapSign of 0 (for "none") makes the gap term drop out, so schedules are
   // ordered only by whether they fit the time window.

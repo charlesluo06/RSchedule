@@ -82,7 +82,7 @@ export interface SerializedSchedule {
   fitsTimeRange: boolean;
 }
 
-export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict";
+export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict" | "course-conflict";
 
 export interface GenerateResponse {
   schedules: SerializedSchedule[]; // up to 3, ranked best first

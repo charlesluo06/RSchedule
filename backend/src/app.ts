@@ -252,7 +252,9 @@ app.post("/generate", (req, res) => {
             ? `${courseCode} has no sections offered this term`
             : reason === "all-full"
               ? `${courseCode}'s sections are all full`
-              : `${courseCode} only has sections that overlap your busy times`,
+              : reason === "busy-conflict"
+                ? `${courseCode} only has sections that overlap your busy times`
+                : `${courseCode}'s sections all conflict with your other selected courses`,
         )
         .join("; ");
       message = `No schedule is possible: ${details}.`;

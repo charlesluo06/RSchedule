@@ -13,6 +13,7 @@ const REASON_LABELS: Record<UnschedulableReason, string> = {
   "not-offered": "not offered this term",
   "all-full": "all sections full",
   "busy-conflict": "overlaps your busy times",
+  "course-conflict": "conflicts with your other selected courses",
 };
 
 function UnschedulableBadges({ courses }: UnschedulableBadgesProps) {

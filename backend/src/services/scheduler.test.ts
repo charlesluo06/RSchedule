@@ -3,8 +3,31 @@
 // (see conversation history) — turning one-time verification into a
 // permanent regression test instead of re-deriving it from scratch next time.
 import { describe, expect, it } from "vitest";
-import { generateSchedules } from "./scheduler.js";
+import { applyArcConsistency, generateSchedules } from "./scheduler.js";
 import { Bundle, DayOfWeek } from "../types.js";
+
+// Builds a single-section bundle for an arbitrary course/CRN pair — unlike
+// the `section()` helper below (which ties courseCode to the CRN 1:1), this
+// lets a test put multiple distinct bundles under the SAME course, which
+// arc-consistency tests need.
+function bundleFor(courseCode: string, crn: string, day: DayOfWeek, start: string, end: string): Bundle {
+  return {
+    courseCode,
+    sections: [
+      {
+        crn,
+        courseCode,
+        sectionType: "Lecture",
+        linkId: null,
+        meetings: [{ day, startTime: start, endTime: end, building: "B", room: "1" }],
+        seatsAvailable: 10,
+        maximumEnrollment: 30,
+        creditHours: 4,
+        instructor: "Prof X",
+      },
+    ],
+  };
+}
 
 function section(crn: string, day: DayOfWeek, start: string, end: string): Bundle {
   return {
@@ -122,5 +145,109 @@ describe("generateSchedules — buffer is applied after a busy block ends only, 
       { label: "Work", days: ["Mon"], startTime: "08:00", endTime: "12:00", bufferMinutes: 30 },
     ]);
     expect(result.anyValidSchedule).toBe(true);
+  });
+});
+
+describe("applyArcConsistency", () => {
+  it("removes a bundle that conflicts with every bundle of another course", () => {
+    // CS100's only section conflicts with both of MATH009A's sections — it
+    // can never be part of any valid schedule, so it should be removed
+    // even though nothing has actually tried to combine them yet.
+    const courseOrder = [
+      {
+        courseCode: "MATH009A",
+        bundles: [
+          bundleFor("MATH009A", "1", "Mon", "09:00", "09:50"),
+          bundleFor("MATH009A", "2", "Mon", "11:00", "11:50"),
+        ],
+      },
+      { courseCode: "CS100", bundles: [bundleFor("CS100", "3", "Mon", "09:00", "11:50")] },
+    ];
+
+    const result = applyArcConsistency(courseOrder);
+    const cs100 = result.find((c) => c.courseCode === "CS100")!;
+    expect(cs100.bundles).toEqual([]);
+  });
+
+  it("keeps a bundle that's compatible with at least one option of every other course", () => {
+    const courseOrder = [
+      {
+        courseCode: "MATH009A",
+        bundles: [
+          bundleFor("MATH009A", "1", "Mon", "09:00", "09:50"),
+          bundleFor("MATH009A", "2", "Mon", "11:00", "11:50"),
+        ],
+      },
+      // Conflicts with MATH009A's first section but not its second — has a
+      // real chance of being used, so it must survive.
+      { courseCode: "CS100", bundles: [bundleFor("CS100", "3", "Mon", "09:00", "09:50")] },
+    ];
+
+    const result = applyArcConsistency(courseOrder);
+    const cs100 = result.find((c) => c.courseCode === "CS100")!;
+    expect(cs100.bundles).toHaveLength(1);
+  });
+
+  it("leaves completely independent courses untouched", () => {
+    const courseOrder = [
+      { courseCode: "A", bundles: [bundleFor("A", "1", "Mon", "09:00", "09:50")] },
+      { courseCode: "B", bundles: [bundleFor("B", "2", "Tue", "09:00", "09:50")] },
+    ];
+
+    const result = applyArcConsistency(courseOrder);
+    expect(result.find((c) => c.courseCode === "A")!.bundles).toHaveLength(1);
+    expect(result.find((c) => c.courseCode === "B")!.bundles).toHaveLength(1);
+  });
+
+  it("cascades removals to a fixed point across three courses", () => {
+    // The cascade: b1 conflicts with C's only bundle (c1), so b1 gets
+    // removed once B is checked against C. But a1's ONLY compatible option
+    // in B was b1 — once b1 is gone, a1 has no remaining support either,
+    // even though a1 vs b2 was never directly incompatible-with-everything
+    // on the very first look at A-vs-B (b1 was still there then). A single
+    // non-iterated pass — checking A against B before B ever loses b1 —
+    // would leave a1 in place by mistake; only re-sweeping to a fixed point
+    // catches this.
+    const courseOrder = [
+      {
+        courseCode: "A",
+        bundles: [
+          bundleFor("A", "a1", "Mon", "09:00", "09:50"), // only compatible with B1
+          bundleFor("A", "a2", "Wed", "09:00", "09:50"), // compatible with everything
+        ],
+      },
+      {
+        courseCode: "B",
+        bundles: [
+          bundleFor("B", "b1", "Tue", "09:00", "09:50"), // conflicts with every C bundle -> removed
+          bundleFor("B", "b2", "Mon", "09:00", "09:50"), // conflicts with A's a1 -> only survives via a2
+        ],
+      },
+      { courseCode: "C", bundles: [bundleFor("C", "c1", "Tue", "09:00", "09:50")] },
+    ];
+
+    const result = applyArcConsistency(courseOrder);
+    const a = result.find((c) => c.courseCode === "A")!;
+    const b = result.find((c) => c.courseCode === "B")!;
+    const c = result.find((c) => c.courseCode === "C")!;
+
+    // b1 is gone (conflicts with C's only bundle).
+    expect(b.bundles.map((bundle) => bundle.sections[0].crn)).toEqual(["b2"]);
+    // a1's only support (b1) is gone, so a1 must be gone too — this is
+    // specifically the cascading case a single non-iterated pass would miss.
+    expect(a.bundles.map((bundle) => bundle.sections[0].crn)).toEqual(["a2"]);
+    // c1 has no conflicts with what's left of A or B, so it survives.
+    expect(c.bundles).toHaveLength(1);
+  });
+
+  it("never removes anything when nothing is actually incompatible", () => {
+    const courseOrder = [
+      { courseCode: "A", bundles: [bundleFor("A", "1", "Mon", "09:00", "09:50")] },
+      { courseCode: "B", bundles: [bundleFor("B", "2", "Mon", "10:00", "10:50")] },
+      { courseCode: "C", bundles: [bundleFor("C", "3", "Mon", "11:00", "11:50")] },
+    ];
+
+    const result = applyArcConsistency(courseOrder);
+    expect(result.every((c) => c.bundles.length === 1)).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getCourseCodesForSubject, getSubjects } from "../api";
 import { normalizeCourseCode } from "../lib/normalize";
+import { MAX_COURSES } from "../lib/limits";
 import type { CourseCodeOption, Subject } from "../types";
 
 const MAX_SUGGESTIONS = 5;
@@ -125,7 +126,7 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
 
   function addCourse(code: string) {
     const normalized = normalizeCourseCode(code);
-    if (normalized && !courseCodes.includes(normalized)) {
+    if (normalized && !courseCodes.includes(normalized) && courseCodes.length < MAX_COURSES) {
       onChange([...courseCodes, normalized]);
     }
     setDraft("");
@@ -163,6 +164,8 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
     }
   }
 
+  const atLimit = courseCodes.length >= MAX_COURSES;
+
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-sm font-medium text-primary-700">Courses</span>
@@ -196,12 +199,14 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
           onChange={(e) => handleDraftChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={() => setSuggestionsOpen(false)}
-          placeholder="e.g. MATH010A"
+          disabled={atLimit}
+          placeholder={atLimit ? `Limit reached (${MAX_COURSES} courses)` : "e.g. MATH010A"}
           role="combobox"
           aria-expanded={suggestionsOpen}
           aria-autocomplete="list"
           className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-neutral-900
-                     placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                     placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-500
+                     disabled:cursor-not-allowed disabled:bg-neutral-100"
         />
 
         {/* Shimmer bar — only while an actual network fetch is in flight

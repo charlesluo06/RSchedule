@@ -3,7 +3,7 @@
 // function's own doc comment in app.ts for why it gets real validation
 // where the rest of the route deliberately doesn't).
 import { describe, expect, it } from "vitest";
-import { validateBusyBlocks } from "./app.js";
+import { MAX_COURSES_PER_REQUEST, validateBusyBlocks, validateCourseCodes } from "./app.js";
 
 describe("validateBusyBlocks", () => {
   it("treats an omitted busyBlocks as an empty array (backwards compatible)", () => {
@@ -93,5 +93,29 @@ describe("validateBusyBlocks", () => {
     const result = validateBusyBlocks([{ days: ["Mon"], startTime: "10:00", endTime: "11:00" }]);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value[0].label).toBe("");
+  });
+});
+
+describe("validateCourseCodes", () => {
+  it("accepts 1 up to the max number of courses", () => {
+    expect(validateCourseCodes(["CS010A"]).ok).toBe(true);
+    const max = Array.from({ length: MAX_COURSES_PER_REQUEST }, (_, i) => `CS${100 + i}`);
+    expect(validateCourseCodes(max).ok).toBe(true);
+  });
+
+  it("rejects more than the max", () => {
+    const tooMany = Array.from({ length: MAX_COURSES_PER_REQUEST + 1 }, (_, i) => `CS${100 + i}`);
+    const result = validateCourseCodes(tooMany);
+    expect(result.ok).toBe(false);
+  });
+
+  it.each([
+    ["non-array", "CS010A"],
+    ["empty array", []],
+    ["non-string entry", ["CS010A", 5]],
+    ["empty string entry", [""]],
+    ["overlong entry", ["X".repeat(50)]],
+  ])("rejects %s", (_label, input) => {
+    expect(validateCourseCodes(input).ok).toBe(false);
   });
 });

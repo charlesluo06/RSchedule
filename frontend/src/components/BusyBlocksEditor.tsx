@@ -69,15 +69,26 @@ function BusyBlocksEditor({ blocks, onChange, align = "left" }: BusyBlocksEditor
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setModalOpen(true)}
-        className={`cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
-                   text-neutral-700 transition-colors hover:bg-neutral-100
-                   ${centered ? "self-center" : "self-start"}`}
-      >
-        + Customize busy times
-      </button>
+      <div className={`flex items-center gap-2 ${centered ? "self-center" : "self-start"}`}>
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
+                     text-neutral-700 transition-colors hover:bg-neutral-100"
+        >
+          + Customize busy times
+        </button>
+        {blocks.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="cursor-pointer rounded-lg px-2 py-1.5 text-sm font-medium text-neutral-500
+                       transition-colors hover:text-primary-700"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
 
       {modalOpen && <BusyBlockModal onAdd={addBlock} onClose={() => setModalOpen(false)} />}
     </div>

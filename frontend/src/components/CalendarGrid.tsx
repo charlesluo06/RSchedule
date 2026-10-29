@@ -145,6 +145,7 @@ function CalendarGrid({ selections, preferences, termCode, busyBlocks = [], grid
                           color={color}
                           courseCode={courseCode}
                           sectionType={section.sectionType}
+                          crn={section.crn}
                           room={`${meeting.building} ${meeting.room}`}
                           startTime={meeting.startTime}
                           endTime={meeting.endTime}

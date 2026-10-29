@@ -15,6 +15,37 @@ import UnschedulableBadges from "./components/UnschedulableBadges";
 import BootScreen from "./components/BootScreen";
 import LegalModal from "./components/LegalModal";
 import { courseColorForIndex } from "./lib/colors";
+import { usePersistedState } from "./lib/usePersistedState";
+
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string");
+}
+
+function isPreferences(v: unknown): v is Preferences {
+  const p = v as Preferences | null;
+  return !!p && typeof p.startTime === "string" && HHMM_RE.test(p.startTime) && typeof p.endTime === "string" && HHMM_RE.test(p.endTime);
+}
+
+function isBusyBlockArray(v: unknown): v is BusyBlock[] {
+  return (
+    Array.isArray(v) &&
+    v.every(
+      (b) =>
+        !!b &&
+        typeof b.id === "string" &&
+        typeof b.label === "string" &&
+        Array.isArray(b.days) &&
+        b.days.length > 0 &&
+        b.days.every((d: unknown) => typeof d === "string" && DAYS.includes(d)) &&
+        HHMM_RE.test(b.startTime) &&
+        HHMM_RE.test(b.endTime) &&
+        typeof b.bufferMinutes === "number",
+    )
+  );
+}
 
 const PITCH_FEATURES = [
   "Live seat counts pulled straight from UCR",
@@ -83,18 +114,22 @@ function App() {
   // boot screen stays up for at least one full fill cycle regardless of how
   // fast the network actually is.
   const [bootMinTimeElapsed, setBootMinTimeElapsed] = useState(false);
-  const [courseCodes, setCourseCodes] = useState<string[]>([]);
-  const [preferences, setPreferences] = useState<Preferences>({
-    startTime: "08:00",
-    endTime: "20:00",
-  });
+  // Setup inputs persist across refreshes (see usePersistedState). The term is
+  // deliberately NOT persisted so returning users always land on the current
+  // default term instead of whatever they last browsed.
+  const [courseCodes, setCourseCodes] = usePersistedState<string[]>("rschedule.courseCodes", [], isStringArray);
+  const [preferences, setPreferences] = usePersistedState<Preferences>(
+    "rschedule.preferences",
+    { startTime: "08:00", endTime: "20:00" },
+    isPreferences,
+  );
   // Held so preference changes on the results view can re-call postGenerate
   // without re-fetching from UCR — only re-fetched when courses/term change.
   // Kept separate from `preferences` (which mirrors the backend's
   // TimeRangePreference contract exactly) rather than merged in — merging
   // would ripple into PreferencesBar's and CalendarGrid's existing
   // `preferences` prop contracts for no real benefit.
-  const [busyBlocks, setBusyBlocks] = useState<BusyBlock[]>([]);
+  const [busyBlocks, setBusyBlocks] = usePersistedState<BusyBlock[]>("rschedule.busyBlocks", [], isBusyBlockArray);
   const [courseBundles, setCourseBundles] = useState<Record<string, Bundle[]> | null>(null);
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null);
   const [activeTab, setActiveTab] = useState(0);
@@ -249,6 +284,9 @@ function App() {
         backgroundColor: "#ffffff",
         pixelRatio: 1.5,
         skipFonts: true,
+        // UI-only controls (e.g. the per-block copy-CRN button) don't belong
+        // in the exported picture.
+        filter: (node) => !(node instanceof HTMLElement && node.hasAttribute("data-no-export")),
       });
       const link = document.createElement("a");
       link.href = dataUrl;

@@ -4,6 +4,7 @@ import type { Section } from "../types";
 import type { CourseColor } from "../lib/colors";
 import { formatClock } from "../lib/time";
 import { getSectionAttributes } from "../api";
+import { copyText } from "../lib/clipboard";
 
 interface ClassDetailModalProps {
   courseCode: string;
@@ -38,10 +39,11 @@ function ClassDetailModal({ courseCode, section, color, bundleCredits, termCode,
     };
   }, [section.crn, termCode]);
 
-  function handleCopyCrn() {
-    navigator.clipboard.writeText(section.crn);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  async function handleCopyCrn() {
+    if (await copyText(section.crn)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
   }
 
   // Escape closes the modal, same as clicking outside it — a modal that

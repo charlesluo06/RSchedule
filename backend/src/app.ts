@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { getCourseBundles, getCourseCodesForSubject, getSectionAttributes, getSubjects } from "./services/courseService.js";
+import { UcrUnavailableError, getCourseBundles, getCourseCodesForSubject, getSectionAttributes, getSubjects } from "./services/courseService.js";
 import { fetchTerms } from "./services/ucrClient.js";
 import { isWithinRateLimit } from "./services/rateLimit.js";
 import { CandidateSchedule, Bundle, BusyBlock, DayOfWeek } from "./types.js";
@@ -42,6 +42,17 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// 502 means UCR itself failed; anything else is a problem on our side (500).
+// The frontend shows a different message for each, so "UCR is down" is never
+// blamed for something that was really our bug or an outage on our end.
+function sendServiceError(res: express.Response, err: unknown, ucrFailureMessage: string) {
+  if (err instanceof UcrUnavailableError) {
+    res.status(502).json({ error: ucrFailureMessage });
+  } else {
+    res.status(500).json({ error: "Something went wrong on our side. Please try again shortly." });
+  }
+}
+
 app.get("/terms", async (_req, res) => {
   try {
     res.json(await fetchTerms());
@@ -62,7 +73,7 @@ app.get("/subjects", async (req, res) => {
     res.json(await getSubjects(termCode));
   } catch (err) {
     console.error(`Failed to fetch subjects for ${termCode}:`, err);
-    res.status(502).json({ error: "Failed to load subjects from UCR. Please try again shortly." });
+    sendServiceError(res, err, "Failed to load subjects from UCR. Please try again shortly.");
   }
 });
 
@@ -79,7 +90,7 @@ app.get("/section-attributes", async (req, res) => {
     res.json(await getSectionAttributes(crn, termCode));
   } catch (err) {
     console.error(`Failed to fetch section attributes for CRN ${crn} (${termCode}):`, err);
-    res.status(502).json({ error: "Failed to load section attributes from UCR. Please try again shortly." });
+    sendServiceError(res, err, "Failed to load section attributes from UCR. Please try again shortly.");
   }
 });
 
@@ -96,7 +107,7 @@ app.get("/course-codes", async (req, res) => {
     res.json(await getCourseCodesForSubject(subject, termCode));
   } catch (err) {
     console.error(`Failed to fetch course codes for ${subject} (${termCode}):`, err);
-    res.status(502).json({ error: "Failed to load course codes from UCR. Please try again shortly." });
+    sendServiceError(res, err, "Failed to load course codes from UCR. Please try again shortly.");
   }
 });
 
@@ -130,7 +141,7 @@ app.post("/courses", async (req, res) => {
     res.json(byCourseCode);
   } catch (err) {
     console.error("Failed to fetch course data from UCR:", err);
-    res.status(502).json({ error: "Failed to fetch course data from UCR. Please try again shortly." });
+    sendServiceError(res, err, "Failed to fetch course data from UCR. Please try again shortly.");
   }
 });
 

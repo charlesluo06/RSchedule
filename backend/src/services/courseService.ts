@@ -23,6 +23,41 @@ import {
 } from "./cache.js";
 
 /**
+ * Thrown when a fetch from UCR itself fails, so routes can tell "UCR is down"
+ * (502) apart from "something broke on our side" (500) — the frontend shows a
+ * different message for each.
+ */
+export class UcrUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super("UCR request failed");
+    this.name = "UcrUnavailableError";
+    this.cause = cause;
+  }
+}
+
+async function fromUcr<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (err) {
+    throw new UcrUnavailableError(err);
+  }
+}
+
+/**
+ * Cache reads fail open: if Redis is down or over quota, treat it as a cache
+ * miss and go to UCR instead of failing the request. Slower and heavier on
+ * UCR, but the student still gets live data rather than an error.
+ */
+async function readCache<T>(label: string, read: () => Promise<T | null>): Promise<T | null> {
+  try {
+    return await read();
+  } catch (err) {
+    console.warn(`Cache read failed for ${label}; treating as a miss.`, err);
+    return null;
+  }
+}
+
+/**
  * The single entry point the /courses endpoint should call. Handles the
  * cache-first logic and falls back to serving stale cached data (rather
  * than failing outright) if UCR is unreachable when we need fresh data.
@@ -42,8 +77,8 @@ export async function getCourseBundles(
   forceRefresh = false,
 ): Promise<Bundle[]> {
   const [cachedBundles, cachedSeats] = await Promise.all([
-    getCachedBundles(courseCode, termCode),
-    getCachedSeats(courseCode, termCode),
+    readCache(`bundles ${courseCode} (${termCode})`, () => getCachedBundles(courseCode, termCode)),
+    readCache(`seats ${courseCode} (${termCode})`, () => getCachedSeats(courseCode, termCode)),
   ]);
 
   // Both caches still fresh: no need to touch UCR at all — unless the
@@ -54,7 +89,7 @@ export async function getCourseBundles(
 
   let freshBundles: Bundle[];
   try {
-    freshBundles = await fetchCourseBundles(courseCode, termCode);
+    freshBundles = await fromUcr(fetchCourseBundles(courseCode, termCode));
   } catch (err) {
     if (cachedBundles) {
       console.warn(`UCR fetch failed for ${courseCode} (${termCode}); serving stale cached data.`, err);
@@ -85,10 +120,10 @@ export async function getCourseBundles(
  * this is a simple cache-or-fetch, no forceRefresh/fallback complexity needed.
  */
 export async function getCourseCodesForSubject(subject: string, termCode: string): Promise<CourseCodeOption[]> {
-  const cached = await getCachedCourseCodes(subject, termCode);
+  const cached = await readCache(`course-codes ${subject} (${termCode})`, () => getCachedCourseCodes(subject, termCode));
   if (cached) return cached;
 
-  const fresh = await fetchCourseCodesForSubject(subject, termCode);
+  const fresh = await fromUcr(fetchCourseCodesForSubject(subject, termCode));
   try {
     await setCachedCourseCodes(subject, termCode, fresh);
   } catch (err) {
@@ -99,10 +134,10 @@ export async function getCourseCodesForSubject(subject: string, termCode: string
 
 /** Cache-first list of every subject UCR offers for a term. */
 export async function getSubjects(termCode: string): Promise<Subject[]> {
-  const cached = await getCachedSubjects(termCode);
+  const cached = await readCache(`subjects (${termCode})`, () => getCachedSubjects(termCode));
   if (cached) return cached;
 
-  const fresh = await fetchSubjects(termCode);
+  const fresh = await fromUcr(fetchSubjects(termCode));
   try {
     await setCachedSubjects(termCode, fresh);
   } catch (err) {
@@ -113,10 +148,10 @@ export async function getSubjects(termCode: string): Promise<Subject[]> {
 
 /** Cache-first list of GE/breadth requirements a section fulfills. */
 export async function getSectionAttributes(crn: string, termCode: string): Promise<string[]> {
-  const cached = await getCachedAttributes(crn, termCode);
+  const cached = await readCache(`attributes CRN ${crn} (${termCode})`, () => getCachedAttributes(crn, termCode));
   if (cached) return cached;
 
-  const fresh = await fetchSectionAttributes(crn, termCode);
+  const fresh = await fromUcr(fetchSectionAttributes(crn, termCode));
   try {
     await setCachedAttributes(crn, termCode, fresh);
   } catch (err) {

@@ -71,11 +71,27 @@ async function readCache<T>(label: string, read: () => Promise<T | null>): Promi
  * than failing outright — "give me fresher data" shouldn't mean "or nothing
  * at all" if the fresher attempt hits a snag.
  */
-export async function getCourseBundles(
-  courseCode: string,
-  termCode: string,
-  forceRefresh = false,
-): Promise<Bundle[]> {
+export function getCourseBundles(courseCode: string, termCode: string, forceRefresh = false): Promise<Bundle[]> {
+  // Identical requests that arrive while one is still running share its
+  // result instead of each queueing their own live UCR search (searches run
+  // one at a time per term, so duplicates would just make everyone wait).
+  // forceRefresh is part of the key so a forced refresh is never answered by
+  // an in-flight lookup that might have been served from cache. In-memory, so
+  // this only dedupes within one server instance.
+  const key = `${termCode}:${courseCode}:${forceRefresh}`;
+  const existing = inFlightBundles.get(key);
+  if (existing) return existing;
+
+  const request = loadCourseBundles(courseCode, termCode, forceRefresh).finally(() => {
+    inFlightBundles.delete(key);
+  });
+  inFlightBundles.set(key, request);
+  return request;
+}
+
+const inFlightBundles = new Map<string, Promise<Bundle[]>>();
+
+async function loadCourseBundles(courseCode: string, termCode: string, forceRefresh: boolean): Promise<Bundle[]> {
   const [cachedBundles, cachedSeats] = await Promise.all([
     readCache(`bundles ${courseCode} (${termCode})`, () => getCachedBundles(courseCode, termCode)),
     readCache(`seats ${courseCode} (${termCode})`, () => getCachedSeats(courseCode, termCode)),

@@ -17,6 +17,11 @@ import LegalModal from "./components/LegalModal";
 import { courseColorForIndex } from "./lib/colors";
 import { usePersistedState } from "./lib/usePersistedState";
 
+// Seconds a student must wait between "Refresh seats" clicks. Each click is a
+// full live fetch from UCR (there's no seats-only endpoint), so this keeps one
+// person from hammering it.
+const REFRESH_COOLDOWN_SECONDS = 15;
+
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
@@ -137,6 +142,7 @@ function App() {
   const [generateLoading, setGenerateLoading] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
   // Points at CalendarGrid's own root div (just the hour axis + day
   // columns, not ArrangedNote or the modal) — see handleDownloadSchedule.
   const calendarGridRef = useRef<HTMLDivElement>(null);
@@ -148,6 +154,13 @@ function App() {
     const timer = setTimeout(() => setBootMinTimeElapsed(true), 600);
     return () => clearTimeout(timer);
   }, []);
+
+  // Counts the Refresh-seats cooldown down once a second until it hits 0.
+  useEffect(() => {
+    if (refreshCooldown <= 0) return;
+    const timer = setTimeout(() => setRefreshCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [refreshCooldown]);
 
   // Fetch the live term list once, when the app first loads.
   useEffect(() => {
@@ -246,6 +259,7 @@ function App() {
   // up during registration rush hour gets truly live numbers, not whatever
   // was cached up to 3 minutes ago.
   function handleRefreshSeats() {
+    if (refreshCooldown > 0) return;
     setGenerateLoading(true);
     setGenerateError(null);
     postCourses(courseCodes, selectedTermCode, true)
@@ -258,7 +272,10 @@ function App() {
         setActiveTab(0);
       })
       .catch((err: Error) => setGenerateError(err.message))
-      .finally(() => setGenerateLoading(false));
+      .finally(() => {
+        setGenerateLoading(false);
+        setRefreshCooldown(REFRESH_COOLDOWN_SECONDS);
+      });
   }
 
   // Renders just CalendarGrid's own root div (hour axis + day columns — see
@@ -300,6 +317,11 @@ function App() {
     }
   }
 
+  const refreshLabel = generateLoading
+    ? "Refreshing…"
+    : refreshCooldown > 0
+      ? `Updated · ${refreshCooldown}s`
+      : "↻ Refresh seats";
   const canGenerate = courseCodes.length > 0 && selectedTermCode !== "" && !generateLoading;
   const activeSchedule = generateResult?.schedules[activeTab];
   // If not a single returned schedule fits the preferred time window, treat
@@ -471,12 +493,12 @@ function App() {
               <button
                 type="button"
                 onClick={handleRefreshSeats}
-                disabled={generateLoading}
+                disabled={generateLoading || refreshCooldown > 0}
                 className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
                            text-neutral-700 transition-colors hover:bg-neutral-100
                            disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {generateLoading ? "Refreshing…" : "↻ Refresh seats"}
+                {refreshLabel}
               </button>
               {showCalendar && activeSchedule && (
                 <button
@@ -550,12 +572,12 @@ function App() {
                     <button
                       type="button"
                       onClick={handleRefreshSeats}
-                      disabled={generateLoading}
+                      disabled={generateLoading || refreshCooldown > 0}
                       className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
                                  text-neutral-700 transition-colors hover:bg-neutral-100
                                  disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {generateLoading ? "Refreshing…" : "↻ Refresh seats"}
+                      {refreshLabel}
                     </button>
                   </div>
                 </div>

@@ -88,4 +88,58 @@ describe("courseService failure modes", () => {
 
     await expect(getSubjects("202710")).rejects.toBeInstanceOf(UcrUnavailableError);
   });
+
+  describe("in-flight dedupe", () => {
+    function missingCache() {
+      cache.getCachedBundles.mockResolvedValue(null);
+      cache.getCachedSeats.mockResolvedValue(null);
+      cache.setCachedBundles.mockResolvedValue(undefined);
+      cache.setCachedSeats.mockResolvedValue(undefined);
+    }
+
+    it("shares one UCR fetch between concurrent requests for the same course", async () => {
+      missingCache();
+      ucr.fetchCourseBundles.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(BUNDLES), 10)));
+
+      const results = await Promise.all([
+        getCourseBundles("CS141", "202710"),
+        getCourseBundles("CS141", "202710"),
+        getCourseBundles("CS141", "202710"),
+      ]);
+
+      expect(ucr.fetchCourseBundles).toHaveBeenCalledOnce();
+      expect(results).toEqual([BUNDLES, BUNDLES, BUNDLES]);
+    });
+
+    it("does not share between different courses or between forced and normal requests", async () => {
+      missingCache();
+      ucr.fetchCourseBundles.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(BUNDLES), 10)));
+
+      await Promise.all([
+        getCourseBundles("CS141", "202710"),
+        getCourseBundles("CS100", "202710"),
+        getCourseBundles("CS141", "202710", true),
+      ]);
+
+      expect(ucr.fetchCourseBundles).toHaveBeenCalledTimes(3);
+    });
+
+    it("fetches again after the first request finishes", async () => {
+      missingCache();
+      ucr.fetchCourseBundles.mockResolvedValue(BUNDLES);
+
+      await getCourseBundles("CS141", "202710");
+      await getCourseBundles("CS141", "202710");
+
+      expect(ucr.fetchCourseBundles).toHaveBeenCalledTimes(2);
+    });
+
+    it("clears a failed request so the next one retries", async () => {
+      missingCache();
+      ucr.fetchCourseBundles.mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(BUNDLES);
+
+      await expect(getCourseBundles("CS141", "202710")).rejects.toBeInstanceOf(UcrUnavailableError);
+      await expect(getCourseBundles("CS141", "202710")).resolves.toEqual(BUNDLES);
+    });
+  });
 });

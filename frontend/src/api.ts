@@ -74,6 +74,11 @@ export async function postCourses(
     // itself (not our server) failed, so the message should say so.
     throw new Error("UCR's registration system appears to be down right now. Please try again shortly.");
   }
+  if (response.status === 500) {
+    // The backend returns 500 (not 502) when the failure was on our side
+    // rather than UCR's, so don't blame UCR for it.
+    throw new Error("Something went wrong on our side. Please try again shortly.");
+  }
   if (!response.ok) {
     throw new Error("Failed to fetch course data.");
   }

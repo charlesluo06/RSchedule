@@ -111,6 +111,26 @@ app.get("/course-codes", async (req, res) => {
   }
 });
 
+// UCR searches run one at a time per term (see withSearchSession in
+// ucrClient.ts), so every extra course adds a serialized live search on a
+// cache miss. 6 matches the frontend's own per-schedule limit and keeps a
+// single request from tying up the queue for everyone else.
+export const MAX_COURSES_PER_REQUEST = 6;
+const MAX_COURSE_CODE_LENGTH = 12;
+
+export function validateCourseCodes(input: unknown): { ok: true } | { ok: false; error: string } {
+  if (!Array.isArray(input) || input.length === 0) {
+    return { ok: false, error: "courseCodes (non-empty array) and termCode are required" };
+  }
+  if (input.length > MAX_COURSES_PER_REQUEST) {
+    return { ok: false, error: `courseCodes cannot exceed ${MAX_COURSES_PER_REQUEST} courses` };
+  }
+  if (!input.every((c) => typeof c === "string" && c.length > 0 && c.length <= MAX_COURSE_CODE_LENGTH)) {
+    return { ok: false, error: "courseCodes must be non-empty strings" };
+  }
+  return { ok: true };
+}
+
 interface CoursesRequestBody {
   courseCodes: string[];
   termCode: string;
@@ -120,8 +140,13 @@ interface CoursesRequestBody {
 app.post("/courses", async (req, res) => {
   const { courseCodes, termCode, forceRefresh } = req.body as CoursesRequestBody;
 
-  if (!Array.isArray(courseCodes) || courseCodes.length === 0 || !termCode) {
+  if (!termCode) {
     res.status(400).json({ error: "courseCodes (non-empty array) and termCode are required" });
+    return;
+  }
+  const validation = validateCourseCodes(courseCodes);
+  if (!validation.ok) {
+    res.status(400).json({ error: validation.error });
     return;
   }
 

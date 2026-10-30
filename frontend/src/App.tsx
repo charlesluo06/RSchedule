@@ -67,7 +67,7 @@ function isBusyBlockArray(v: unknown): v is BusyBlock[] {
 }
 
 const PITCH_FEATURES = [
-  "Live seat counts",
+  "Upload your degree audit",
   "Zero overlapping classes",
   "Fewest gaps between classes",
 ];

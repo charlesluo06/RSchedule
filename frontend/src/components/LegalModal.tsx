@@ -79,6 +79,13 @@ function LegalModal({ onClose }: LegalModalProps) {
               your course registration.
             </p>
           </div>
+          <div>
+            <h3 className="mb-1 font-medium text-primary-700">Error reports</h3>
+            <p>
+              If the app crashes, an anonymous error report (the error and your browser type) may be sent to help
+              fix it. It does not include your courses, schedule, or any personal information.
+            </p>
+          </div>
           <p className="border-t border-neutral-100 pt-3 text-xs text-neutral-500">
             Made by Charles Luo.
           </p>

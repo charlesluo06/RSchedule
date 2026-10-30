@@ -63,12 +63,14 @@ Backend (`backend/.env`):
 |---|---|
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis credentials for caching and rate limiting. Optional locally: without them the app still runs, but nothing is cached and Redis errors are logged. |
 | `RATE_LIMIT_MAX` | Max requests per IP per minute. Optional, defaults to 600. |
+| `SENTRY_DSN` | Sentry DSN for backend error reporting. Optional: reporting is off when unset. |
 
 Frontend:
 
 | Variable | Purpose |
 |---|---|
 | `VITE_API_BASE_URL` | Backend URL, set at build time for production (the frontend and backend are separate deployments). Leave unset locally. |
+| `VITE_SENTRY_DSN` | Sentry DSN for frontend error reporting, set at build time. Optional: reporting is off when unset. |
 
 ## Tests
 

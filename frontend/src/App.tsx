@@ -665,6 +665,13 @@ function App() {
 
           <div className="mb-4 flex flex-col gap-3">
             <MessageBanner message={generateResult.message} />
+            <MessageBanner
+              message={
+                generateResult.truncated
+                  ? "Showing the best schedules found in the time available. For a complete search, try removing a course."
+                  : undefined
+              }
+            />
             <UnschedulableBadges courses={generateResult.unschedulableCourses} />
           </div>
 

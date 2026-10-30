@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import * as Sentry from '@sentry/react'
+import { Analytics } from '@vercel/analytics/react'
 import './index.css'
 import App from './App.tsx'
 import CrashScreen from './components/CrashScreen.tsx'
@@ -21,5 +22,8 @@ createRoot(document.getElementById('root')!).render(
     <Sentry.ErrorBoundary fallback={<CrashScreen />}>
       <App />
     </Sentry.ErrorBoundary>
+    {/* Cookie-free page-view counts (Vercel Web Analytics). Does nothing until
+        Web Analytics is enabled on the project in the Vercel dashboard. */}
+    <Analytics />
   </StrictMode>,
 )

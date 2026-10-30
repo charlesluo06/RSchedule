@@ -88,7 +88,8 @@ function LegalModal({ onClose }: LegalModalProps) {
               RSchedule has no accounts and never asks for your UCR login. Your courses, hours, and busy times are
               saved in your browser only. They're sent to our server just to build your schedule and aren't stored
               there. Your IP address is used briefly to limit abusive traffic, and our hosting provider may keep
-              standard server logs. If the app crashes, an anonymous error report (the error and your browser type)
+              standard server logs. We count page views with privacy-friendly analytics that use no cookies and don't
+              track you across sites. If the app crashes, an anonymous error report (the error and your browser type)
               may be sent to help fix it. It doesn't include your courses or schedule.
             </p>
           </div>

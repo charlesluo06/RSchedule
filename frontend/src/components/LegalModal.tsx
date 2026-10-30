@@ -42,7 +42,7 @@ function LegalModal({ onClose }: LegalModalProps) {
       role="presentation"
     >
       <div
-        className="animate-fade-in w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl
+        className="animate-fade-in max-h-[90svh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl
                    ring-1 ring-black/5 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
         ref={dialogRef}
@@ -69,28 +69,29 @@ function LegalModal({ onClose }: LegalModalProps) {
           <div>
             <h3 className="mb-1 font-medium text-primary-700">Not affiliated with UCR</h3>
             <p>
-              RSchedule is an independent student project. It is not affiliated with, endorsed by, or sponsored by
-              the University of California, Riverside (UCR).
+              RSchedule is an independent student project, not affiliated with, endorsed by, or sponsored by UC
+              Riverside (UCR).
             </p>
           </div>
           <div>
             <h3 className="mb-1 font-medium text-primary-700">Check before you register</h3>
             <p>
-              Seat counts, sections, and meeting times come from UCR's registration system and can be out of date or
-              change at any time. RSchedule is provided as-is, without warranty of any kind. Always confirm your
-              schedule and register through UCR's official portal. RSchedule is not responsible for missed
-              deadlines, full classes, registration errors, or other outcomes related to your registration.
+              Seat counts, sections, and times come from UCR's registration system and can be out of date or change
+              at any time. RSchedule is provided as-is, without warranty. Always confirm your schedule and register
+              through UCR's official portal. RSchedule isn't responsible for missed deadlines, full classes, or other
+              registration outcomes.
             </p>
           </div>
           <div>
             <h3 className="mb-1 font-medium text-primary-700">Your data</h3>
             <p>
-              RSchedule has no accounts and never asks for your UCR login. Your courses, hours, and busy times are
-              saved in your browser only. They're sent to our server just to build your schedule and aren't stored
-              there. Your IP address is used briefly to limit abusive traffic, and our hosting provider may keep
-              standard server logs. We count page views with privacy-friendly analytics that use no cookies and don't
-              track you across sites. If the app crashes, an anonymous error report (the error and your browser type)
-              may be sent to help fix it. It doesn't include your courses or schedule.
+              No accounts, and RSchedule never asks for your UCR login. Your courses, hours, busy times, and degree
+              audit requirements are saved in your browser only. Courses and times are sent to our server just to
+              build your schedule and aren't stored. An uploaded audit PDF is read in your browser and never
+              uploaded, and your name and student ID are not kept. Your IP address is used briefly to limit abuse,
+              and our host may keep standard server logs. We count page views with cookie-free analytics. If the app
+              crashes, an anonymous error report (the error and your browser type, never your courses or schedule)
+              may be sent.
             </p>
           </div>
           <p className="border-t border-neutral-100 pt-3 text-xs text-neutral-500">

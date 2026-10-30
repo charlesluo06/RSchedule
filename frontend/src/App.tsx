@@ -14,6 +14,10 @@ import MessageBanner from "./components/MessageBanner";
 import UnschedulableBadges from "./components/UnschedulableBadges";
 import BootScreen from "./components/BootScreen";
 import LegalModal from "./components/LegalModal";
+import AuditPanel from "./components/AuditPanel";
+import { isAuditData } from "./lib/auditParser";
+import type { AuditData } from "./lib/auditParser";
+import { MAX_COURSES } from "./lib/limits";
 import { courseColorForIndex } from "./lib/colors";
 import { usePersistedState } from "./lib/usePersistedState";
 
@@ -32,6 +36,10 @@ function isStringArray(v: unknown): v is string[] {
 function isPreferences(v: unknown): v is Preferences {
   const p = v as Preferences | null;
   return !!p && typeof p.startTime === "string" && HHMM_RE.test(p.startTime) && typeof p.endTime === "string" && HHMM_RE.test(p.endTime);
+}
+
+function isAuditDataOrNull(v: unknown): v is AuditData | null {
+  return v === null || isAuditData(v);
 }
 
 function isBusyBlockArray(v: unknown): v is BusyBlock[] {
@@ -135,6 +143,11 @@ function App() {
   // would ripple into PreferencesBar's and CalendarGrid's existing
   // `preferences` prop contracts for no real benefit.
   const [busyBlocks, setBusyBlocks] = usePersistedState<BusyBlock[]>("rschedule.busyBlocks", [], isBusyBlockArray);
+  // The imported degree audit, reduced to requirement names and course codes
+  // (see AuditData). Remembered like the other setup inputs; "Clear audit" in
+  // the panel wipes it.
+  const [audit, setAudit] = usePersistedState<AuditData | null>("rschedule.audit", null, isAuditDataOrNull);
+  const [auditPanelOpen, setAuditPanelOpen] = useState(false);
   const [courseBundles, setCourseBundles] = useState<Record<string, Bundle[]> | null>(null);
   const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null);
   const [activeTab, setActiveTab] = useState(0);
@@ -196,6 +209,44 @@ function App() {
       .finally(() => setTermsLoading(false));
   }, []);
 
+  // Used by the audit panel's "+ Add" buttons, which only appear on the
+  // results page. Skips duplicates, respects the same course cap as the course
+  // input, then re-runs the schedule with the new course so the calendar
+  // updates right away.
+  function addCourseFromAudit(code: string) {
+    if (courseCodes.includes(code) || courseCodes.length >= MAX_COURSES) return;
+    const nextCodes = [...courseCodes, code];
+    setCourseCodes(nextCodes);
+    setGenerateLoading(true);
+    setGenerateError(null);
+    postCourses(nextCodes, selectedTermCode)
+      .then((bundles) => {
+        setCourseBundles(bundles);
+        return postGenerate(bundles, preferences, busyBlocks);
+      })
+      .then((result) => {
+        setGenerateResult(result);
+        setActiveTab(0);
+      })
+      .catch((err: Error) => setGenerateError(err.message))
+      .finally(() => setGenerateLoading(false));
+  }
+
+  // The setup page only says whether an audit is uploaded; the full list
+  // lives next to the schedule, so close the panel when heading back.
+  function goToSetup() {
+    setAuditPanelOpen(false);
+    setStep("setup");
+  }
+
+  // Uploading from the setup page just stores the audit (the page shows
+  // "uploaded"); uploading or replacing from the results page keeps the panel
+  // open so the new list shows right away.
+  function handleAuditChange(next: AuditData | null) {
+    setAudit(next);
+    if (step === "setup") setAuditPanelOpen(false);
+  }
+
   // Runs the full pipeline from the setup card: fetch section data from
   // UCR (via our backend), then run the scheduler against it. Both calls
   // happen here because this is the first time we're generating for this
@@ -212,6 +263,7 @@ function App() {
         setGenerateResult(result);
         setActiveTab(0); // a fresh result means the old tab index may no longer exist
         setStep("results");
+        if (audit && window.matchMedia("(min-width: 640px)").matches) setAuditPanelOpen(true);
       })
       .catch((err: Error) => setGenerateError(err.message))
       .finally(() => setGenerateLoading(false));
@@ -328,6 +380,34 @@ function App() {
     : refreshCooldown > 0
       ? `Updated · ${refreshCooldown}s`
       : "↻ Refresh seats";
+  // The degree audit is hidden on phones (below the sm breakpoint): the
+  // requirements list is too much for a small screen.
+  // Gold like the primary actions so the degree audit stands out next to the
+  // gray Schedule / Refresh buttons. Shared by the mobile row and the sticky bar.
+  const auditButton = (
+    <button
+      type="button"
+      onClick={() => setAuditPanelOpen((open) => !open)}
+      className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent-500 px-3 py-1.5 text-sm
+                 font-semibold text-primary-900 transition-colors hover:bg-accent-600"
+    >
+      {/* Same arrow-and-tray look as the download icon, pointing up. */}
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 16V3M12 3L8 7.5M12 3L16 7.5" />
+        <path d="M15 21H9C6.17 21 4.76 21 3.88 20.12C3 19.24 3 17.83 3 15M21 15C21 17.83 21 19.24 20.12 20.12C19.82 20.42 19.46 20.62 19 20.75" />
+      </svg>
+      Degree audit
+    </button>
+  );
   const canGenerate = courseCodes.length > 0 && selectedTermCode !== "" && !generateLoading;
   const activeSchedule = generateResult?.schedules[activeTab];
   // If not a single returned schedule fits the preferred time window, treat
@@ -341,7 +421,13 @@ function App() {
   }
 
   return (
-    <div className="relative min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-4 sm:p-6">
+    <div
+      className={`relative min-h-svh bg-linear-to-b from-neutral-50 to-neutral-100 flex flex-col items-center justify-center gap-6 p-4 sm:p-6 ${
+        // Make room for the docked audit panel on desktop (it overlays as a
+        // bottom sheet on smaller screens, so no padding there).
+        auditPanelOpen && audit ? "lg:pr-[27rem]" : ""
+      }`}
+    >
       {/* Purely decorative — a faint dot grid, so the empty space around
           the page content reads as intentional atmosphere instead of
           unfinished emptiness. Shared by both setup and results screens.
@@ -404,9 +490,31 @@ function App() {
 
           <div className="mt-4">
             <CourseChipInput courseCodes={courseCodes} termCode={selectedTermCode} onChange={setCourseCodes} />
+            <div className="mt-2 hidden flex-wrap items-center gap-x-3 gap-y-1 sm:flex">
+              {audit ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800">
+                    ✓ Degree audit uploaded
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAudit(null)}
+                    className="cursor-pointer text-sm font-medium text-neutral-500 transition-colors hover:text-primary-700"
+                  >
+                    Remove
+                  </button>
+                  <span className="text-xs text-neutral-500 italic">Shows next to your schedule</span>
+                </>
+              ) : (
+                <>
+                  {auditButton}
+                  <span className="text-xs text-neutral-500 italic">Optional: see the classes you still need</span>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-8">
             <TimeRangeSlider
               startTime={preferences.startTime}
               endTime={preferences.endTime}
@@ -464,6 +572,18 @@ function App() {
         </>
       )}
 
+      {auditPanelOpen && (
+        <AuditPanel
+          audit={audit}
+          termCode={selectedTermCode}
+          selectedCodes={courseCodes}
+          onAdd={addCourseFromAudit}
+          onAuditChange={handleAuditChange}
+          loading={generateLoading}
+          onClose={() => setAuditPanelOpen(false)}
+        />
+      )}
+
       {step === "results" && generateResult && (
         <div
           className="animate-fade-in relative w-full max-w-5xl rounded-2xl border border-white/40 bg-white/60 p-4 shadow-lg
@@ -478,7 +598,7 @@ function App() {
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setStep("setup")}
+                onClick={goToSetup}
                 className="cursor-pointer text-2xl font-semibold tracking-tight opacity-100 transition-opacity hover:opacity-70"
               >
                 <span className="text-accent-500">R</span>
@@ -486,7 +606,7 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setStep("setup")}
+                onClick={goToSetup}
                 className="cursor-pointer text-sm font-medium text-primary-700 hover:underline"
               >
                 ← Edit courses
@@ -585,6 +705,7 @@ function App() {
                     >
                       {refreshLabel}
                     </button>
+                    {auditButton}
                   </div>
                 </div>
               </div>

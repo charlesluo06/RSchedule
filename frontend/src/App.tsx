@@ -33,6 +33,12 @@ function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === "string");
 }
 
+// A list saved back when the cap was higher would now be rejected by the
+// backend, so treat an over-cap list as invalid instead of loading it.
+function isCourseCodeList(v: unknown): v is string[] {
+  return isStringArray(v) && v.length <= MAX_COURSES;
+}
+
 function isPreferences(v: unknown): v is Preferences {
   const p = v as Preferences | null;
   return !!p && typeof p.startTime === "string" && HHMM_RE.test(p.startTime) && typeof p.endTime === "string" && HHMM_RE.test(p.endTime);
@@ -130,7 +136,7 @@ function App() {
   // Setup inputs persist across refreshes (see usePersistedState). The term is
   // deliberately NOT persisted so returning users always land on the current
   // default term instead of whatever they last browsed.
-  const [courseCodes, setCourseCodes] = usePersistedState<string[]>("rschedule.courseCodes", [], isStringArray);
+  const [courseCodes, setCourseCodes] = usePersistedState<string[]>("rschedule.courseCodes", [], isCourseCodeList);
   const [preferences, setPreferences] = usePersistedState<Preferences>(
     "rschedule.preferences",
     { startTime: "08:00", endTime: "20:00" },

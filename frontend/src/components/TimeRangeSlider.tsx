@@ -40,7 +40,7 @@ function TimeRangeSlider({ startTime, endTime, onChange, label = "Preferred time
         </span>
       </div>
 
-      <div className="relative h-6 flex items-center">
+      <div className="relative flex h-6 items-center [@media(pointer:coarse)]:h-8">
         {/* Static track background */}
         <div className="absolute inset-x-0 h-1.5 rounded-full bg-neutral-200" />
         {/* Highlighted segment between the two handles */}

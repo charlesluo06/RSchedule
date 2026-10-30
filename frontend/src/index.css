@@ -77,6 +77,21 @@ input[type="range"].range-thumb::-moz-range-thumb {
   cursor: pointer;
 }
 
+/* Bigger thumbs on touch screens only — 18px is hard to grab with a finger,
+   especially when the two handles sit close together. Desktop keeps the
+   smaller thumbs. */
+@media (pointer: coarse) {
+  input[type="range"].range-thumb::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  input[type="range"].range-thumb::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+  }
+}
+
 /* A subtle, tasteful entrance for the setup/results cards whenever they
    mount (e.g. switching steps, or a fresh /generate result landing) —
    overridden to be instant below when the user prefers reduced motion. */

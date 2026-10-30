@@ -307,7 +307,13 @@ function App() {
       });
       const link = document.createElement("a");
       link.href = dataUrl;
-      link.download = `rschedule-option-${activeTab + 1}.png`;
+      // Local date, not toISOString() (which is UTC and would roll over to
+      // "tomorrow" in the evening for a student in California).
+      const now = new Date();
+      const date = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+        .map((n, i) => (i === 0 ? String(n) : String(n).padStart(2, "0")))
+        .join("-");
+      link.download = `rschedule-${date}.png`;
       link.click();
     } catch (err) {
       console.error("Failed to generate schedule image:", err);

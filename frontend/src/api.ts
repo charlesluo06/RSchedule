@@ -18,8 +18,20 @@ function assertNotRateLimited(response: Response) {
   }
 }
 
+// fetch only rejects when the request never got a response (offline, DNS,
+// blocked, server unreachable), and its message is browser-specific noise
+// like "Failed to fetch" / "Load failed". Swap it for something a student
+// can act on.
+async function request(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new Error("Couldn't reach RSchedule. Check your internet connection and try again.");
+  }
+}
+
 export async function getTerms(): Promise<Term[]> {
-  const response = await fetch(`${API_BASE}/terms`);
+  const response = await request(`${API_BASE}/terms`);
   assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load terms from UCR.");
@@ -29,7 +41,7 @@ export async function getTerms(): Promise<Term[]> {
 
 export async function getSubjects(termCode: string): Promise<Subject[]> {
   const params = new URLSearchParams({ term: termCode });
-  const response = await fetch(`${API_BASE}/subjects?${params}`);
+  const response = await request(`${API_BASE}/subjects?${params}`);
   assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load subjects.");
@@ -39,7 +51,7 @@ export async function getSubjects(termCode: string): Promise<Subject[]> {
 
 export async function getCourseCodesForSubject(subject: string, termCode: string): Promise<CourseCodeOption[]> {
   const params = new URLSearchParams({ subject, term: termCode });
-  const response = await fetch(`${API_BASE}/course-codes?${params}`);
+  const response = await request(`${API_BASE}/course-codes?${params}`);
   assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load course codes.");
@@ -49,7 +61,7 @@ export async function getCourseCodesForSubject(subject: string, termCode: string
 
 export async function getSectionAttributes(crn: string, termCode: string): Promise<string[]> {
   const params = new URLSearchParams({ crn, term: termCode });
-  const response = await fetch(`${API_BASE}/section-attributes?${params}`);
+  const response = await request(`${API_BASE}/section-attributes?${params}`);
   assertNotRateLimited(response);
   if (!response.ok) {
     throw new Error("Failed to load section attributes.");
@@ -62,7 +74,7 @@ export async function postCourses(
   termCode: string,
   forceRefresh = false,
 ): Promise<Record<string, Bundle[]>> {
-  const response = await fetch(`${API_BASE}/courses`, {
+  const response = await request(`${API_BASE}/courses`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ courseCodes, termCode, forceRefresh }),
@@ -73,6 +85,11 @@ export async function postCourses(
     // Matches the backend's own distinction: 502 specifically means UCR
     // itself (not our server) failed, so the message should say so.
     throw new Error("UCR's registration system appears to be down right now. Please try again shortly.");
+  }
+  if (response.status === 504) {
+    // Vercel killed the function at its max duration — almost always a cold
+    // UCR search on a big course list, which is cached by the time they retry.
+    throw new Error("That took too long. Please try again — it's usually faster the second time.");
   }
   if (response.status === 500) {
     // The backend returns 500 (not 502) when the failure was on our side
@@ -94,7 +111,7 @@ export async function postGenerate(
   preferences: Preferences,
   busyBlocks: BusyBlock[] = [],
 ): Promise<GenerateResponse> {
-  const response = await fetch(`${API_BASE}/generate`, {
+  const response = await request(`${API_BASE}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ courseBundles, preferences, busyBlocks }),

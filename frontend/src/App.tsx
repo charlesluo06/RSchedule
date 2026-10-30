@@ -192,7 +192,7 @@ function App() {
         const defaultTerm = recentTerms.find((term) => !term.description.includes("View Only"));
         setSelectedTermCode(defaultTerm?.code ?? recentTerms[0]?.code ?? "");
       })
-      .catch(() => setTermsError("Couldn't load terms from UCR. Is the backend running?"))
+      .catch(() => setTermsError("Couldn't load terms from UCR. Please refresh the page to try again."))
       .finally(() => setTermsLoading(false));
   }, []);
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useModalFocus } from "../lib/useModalFocus";
 import type { BusyBlock, DayOfWeek } from "../types";
 import DayToggleRow from "./DayToggleRow";
 import TimeRangeSlider from "./TimeRangeSlider";
@@ -36,6 +37,7 @@ function makeDraft(): { label: string; days: DayOfWeek[]; startTime: string; end
 // close, scroll lock while open, click-outside-to-dismiss — since this is
 // the second modal in the app and there's no reason to reinvent that.
 function BusyBlockModal({ onAdd, onClose }: BusyBlockModalProps) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
   const [draft, setDraft] = useState(makeDraft);
 
   useEffect(() => {
@@ -81,8 +83,10 @@ function BusyBlockModal({ onAdd, onClose }: BusyBlockModalProps) {
     >
       <div
         className="animate-fade-in w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl
-                   ring-1 ring-black/5"
+                   ring-1 ring-black/5 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="busy-block-modal-title"

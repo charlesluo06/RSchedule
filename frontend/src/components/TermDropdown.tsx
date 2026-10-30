@@ -23,7 +23,11 @@ function TermDropdown({ terms, selectedTermCode, onChange, loading, error }: Ter
   }
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return (
+      <p role="alert" className="text-sm text-red-600">
+        {error}
+      </p>
+    );
   }
 
   const selectedTerm = terms.find((t) => t.code === selectedTermCode);
@@ -70,6 +74,7 @@ function TermDropdown({ terms, selectedTermCode, onChange, loading, error }: Ter
           onKeyDown={handleKeyDown}
           onBlur={() => setIsOpen(false)}
           role="combobox"
+          aria-label={`Term: ${selectedTerm?.description ?? "none selected"}`}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-neutral-200

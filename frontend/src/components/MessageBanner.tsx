@@ -9,7 +9,7 @@ function MessageBanner({ message }: MessageBannerProps) {
   if (!message) return null;
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
       {message}
     </div>
   );

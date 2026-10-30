@@ -431,7 +431,7 @@ function App() {
           </button>
 
           {generateError && (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {generateError}
             </div>
           )}
@@ -443,7 +443,7 @@ function App() {
             type="button"
             onClick={() => setLegalModalOpen(true)}
             className="absolute inset-x-0 bottom-4 flex cursor-pointer items-center justify-center gap-1
-                       text-xs text-neutral-400 hover:text-neutral-600"
+                       text-xs text-neutral-500 hover:text-neutral-700"
           >
             Not affiliated with or endorsed by UCR.
             <svg
@@ -523,7 +523,7 @@ function App() {
           </div>
 
           {generateError && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {generateError}
             </div>
           )}

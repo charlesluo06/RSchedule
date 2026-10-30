@@ -62,6 +62,7 @@ function ScheduleTabs({ schedules, activeTab, onChange }: ScheduleTabsProps) {
               key={index}
               type="button"
               onClick={() => onChange(index)}
+              aria-pressed={index === activeTab}
               className={`flex shrink-0 min-w-32 cursor-pointer flex-col gap-0.5 rounded-xl border-2 px-3 py-2 text-left transition-colors sm:min-w-0 sm:flex-1 ${
                 index === activeTab
                   ? "border-accent-500 bg-accent-500/15 shadow-sm"

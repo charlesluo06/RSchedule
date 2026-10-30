@@ -326,6 +326,9 @@ app.post("/generate", (req, res) => {
   res.json({
     schedules: result.schedules.map(serializeSchedule),
     message,
+    // True when the search hit its time budget, so the schedules are the best
+    // found so far rather than a guaranteed best.
+    truncated: result.truncated,
     unschedulableCourses: result.unschedulableCourses,
   });
 });

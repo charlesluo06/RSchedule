@@ -87,5 +87,7 @@ export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict" |
 export interface GenerateResponse {
   schedules: SerializedSchedule[]; // up to 3, ranked best first
   message?: string;
+  // The search ran out of time and returned its best-so-far.
+  truncated?: boolean;
   unschedulableCourses: { courseCode: string; reason: UnschedulableReason }[];
 }

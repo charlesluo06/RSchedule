@@ -1,11 +1,24 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import * as Sentry from "@sentry/node";
 import { UcrUnavailableError, getCourseBundles, getCourseCodesForSubject, getSectionAttributes, getSubjects } from "./services/courseService.js";
 import { fetchTerms } from "./services/ucrClient.js";
 import { isWithinRateLimit } from "./services/rateLimit.js";
 import { CandidateSchedule, Bundle, BusyBlock, DayOfWeek } from "./types.js";
 import { GapPreference, generateSchedules, TimeRangePreference } from "./services/scheduler.js";
+
+// Error reporting is off unless SENTRY_DSN is set (e.g. local dev). No PII and
+// no performance tracing — just unexpected errors, to stay within the free
+// tier and avoid collecting anything about students.
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  enabled: Boolean(process.env.SENTRY_DSN),
+  // Sentry's defaults collect request headers/bodies/cookies; turn all of it
+  // off — request bodies contain students' courses and busy times.
+  dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },
+  tracesSampleRate: 0,
+});
 
 const app = express();
 // Vercel sits in front of this as a proxy — without trusting it, req.ip
@@ -49,7 +62,13 @@ function sendServiceError(res: express.Response, err: unknown, ucrFailureMessage
   if (err instanceof UcrUnavailableError) {
     res.status(502).json({ error: ucrFailureMessage });
   } else {
-    res.status(500).json({ error: "Something went wrong on our side. Please try again shortly." });
+    Sentry.captureException(err);
+    // Serverless functions can freeze right after responding, so give the
+    // report a moment to send first (flush resolves immediately when Sentry
+    // is disabled).
+    void Sentry.flush(2000).finally(() => {
+      res.status(500).json({ error: "Something went wrong on our side. Please try again shortly." });
+    });
   }
 }
 
@@ -310,5 +329,9 @@ app.post("/generate", (req, res) => {
     unschedulableCourses: result.unschedulableCourses,
   });
 });
+
+// Must come after all routes: reports any error a route didn't handle itself,
+// then falls through to Express's default error response.
+Sentry.setupExpressErrorHandler(app);
 
 export default app;

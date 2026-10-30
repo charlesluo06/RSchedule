@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useModalFocus } from "../lib/useModalFocus";
 import type { Section } from "../types";
 import type { CourseColor } from "../lib/colors";
 import { formatClock } from "../lib/time";
@@ -16,6 +17,7 @@ interface ClassDetailModalProps {
 }
 
 function ClassDetailModal({ courseCode, section, color, bundleCredits, termCode, onClose }: ClassDetailModalProps) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
   const [copied, setCopied] = useState(false);
   const [geFulfillments, setGeFulfillments] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"details" | "fulfills">("details");
@@ -88,8 +90,10 @@ function ClassDetailModal({ courseCode, section, color, bundleCredits, termCode,
     >
       <div
         className="animate-fade-in w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl
-                   ring-1 ring-black/5"
+                   ring-1 ring-black/5 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="class-detail-title"

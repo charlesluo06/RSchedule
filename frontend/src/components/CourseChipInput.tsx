@@ -202,6 +202,7 @@ function CourseChipInput({ courseCodes, termCode, onChange }: CourseChipInputPro
           disabled={atLimit}
           placeholder={atLimit ? `Limit reached (${MAX_COURSES} courses)` : "e.g. MATH010A"}
           role="combobox"
+          aria-label="Add a course"
           aria-expanded={suggestionsOpen}
           aria-autocomplete="list"
           className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-neutral-900

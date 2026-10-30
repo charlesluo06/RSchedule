@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useModalFocus } from "../lib/useModalFocus";
 
 interface LegalModalProps {
   onClose: () => void;
 }
 
 function LegalModal({ onClose }: LegalModalProps) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
   // Escape closes the modal, same as clicking outside it — a modal that
   // only responds to one dismissal method is a small but real usability gap.
   useEffect(() => {
@@ -41,8 +43,10 @@ function LegalModal({ onClose }: LegalModalProps) {
     >
       <div
         className="animate-fade-in w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl
-                   ring-1 ring-black/5"
+                   ring-1 ring-black/5 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="legal-modal-title"

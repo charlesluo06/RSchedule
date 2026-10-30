@@ -44,7 +44,7 @@ function BusyBlocksEditor({ blocks, onChange, align = "left" }: BusyBlocksEditor
     <div className={`flex flex-col gap-1.5 ${centered ? "items-center text-center" : ""}`}>
       <div className="flex items-baseline gap-1.5">
         <span className="text-sm font-semibold text-primary-700">Busy times</span>
-        <span className="text-xs text-neutral-400 italic">Work, practice, etc.</span>
+        <span className="text-xs text-neutral-500 italic">Work, practice, etc.</span>
       </div>
 
       {blocks.length > 0 && (

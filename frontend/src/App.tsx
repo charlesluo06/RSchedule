@@ -426,6 +426,11 @@ function App() {
         // Make room for the docked audit panel on desktop (it overlays as a
         // bottom sheet on smaller screens, so no padding there).
         auditPanelOpen && audit ? "lg:pr-[27rem]" : ""
+      } ${
+        // The setup page's "Not affiliated" footer is pinned to the bottom of
+        // this box; when the content is taller than the screen (e.g. Chrome's
+        // bigger toolbars on iPhone) it needs its own room or it overlaps the card.
+        step === "setup" ? "pb-14 sm:pb-16" : ""
       }`}
     >
       {/* Purely decorative — a faint dot grid, so the empty space around
@@ -445,7 +450,7 @@ function App() {
 
       {step === "setup" && (
         <>
-          <div className="animate-fade-in relative -mt-8 flex w-full max-w-5xl flex-col items-center sm:mt-0 lg:flex-row lg:items-center lg:gap-16">
+          <div className="animate-fade-in relative flex w-full max-w-5xl flex-col items-center lg:flex-row lg:items-center lg:gap-16">
             <div className="flex w-full max-w-md flex-col items-center gap-6 text-center lg:flex-1 lg:items-start lg:text-left">
               <div className="w-full">
                 <h1 className="text-4xl font-semibold tracking-tight lg:text-5xl">
@@ -477,7 +482,7 @@ function App() {
 
           <div className="w-full max-w-md shrink-0 overflow-hidden rounded-2xl border border-white/40 bg-white/60 shadow-lg backdrop-blur-md ring-1 ring-black/5">
           <div className="h-1.5 w-full bg-linear-to-r from-accent-400 via-accent-500 to-accent-600" />
-          <div className="p-6">
+          <div className="p-5 sm:p-6">
           <div className="mt-0">
             <TermDropdown
               terms={terms}
@@ -514,7 +519,7 @@ function App() {
             </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-5 sm:mt-8">
             <TimeRangeSlider
               startTime={preferences.startTime}
               endTime={preferences.endTime}
@@ -532,7 +537,7 @@ function App() {
             type="button"
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className="mt-10 w-full cursor-pointer rounded-xl bg-accent-500 px-4 py-2.5 font-semibold text-primary-900
+            className="mt-6 w-full cursor-pointer sm:mt-10 rounded-xl bg-accent-500 px-4 py-2.5 font-semibold text-primary-900
                        transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {generateLoading ? "Generating…" : "Generate"}

@@ -16,11 +16,6 @@ Sentry.init({
   ignoreErrors: ['ResizeObserver loop limit exceeded', 'ResizeObserver loop completed with undelivered notifications.'],
 })
 
-// TEMPORARY: visit /?sentry-test to verify frontend reporting. Remove.
-if (new URLSearchParams(window.location.search).has('sentry-test')) {
-  Sentry.captureException(new Error('Sentry frontend test'))
-}
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Sentry.ErrorBoundary fallback={<CrashScreen />}>

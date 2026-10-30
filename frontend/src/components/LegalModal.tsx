@@ -65,25 +65,27 @@ function LegalModal({ onClose }: LegalModalProps) {
           <div>
             <h3 className="mb-1 font-medium text-primary-700">Not affiliated with UCR</h3>
             <p>
-              RSchedule is an independent student project and is not affiliated with, endorsed by, or sponsored by
+              RSchedule is an independent student project. It is not affiliated with, endorsed by, or sponsored by
               the University of California, Riverside (UCR).
             </p>
           </div>
           <div>
-            <h3 className="mb-1 font-medium text-primary-700">No warranty</h3>
+            <h3 className="mb-1 font-medium text-primary-700">Check before you register</h3>
             <p>
-              RSchedule pulls data directly from UCR's registration system, but seat counts, offered sections, and
-              meeting times can change at any time. This tool is provided as-is, without warranty of any kind —
-              always verify your schedule and registration details through UCR's official registration portal.
-              RSchedule is not responsible for missed deadlines, registration errors, or other outcomes related to
-              your course registration.
+              Seat counts, sections, and meeting times come from UCR's registration system and can be out of date or
+              change at any time. RSchedule is provided as-is, without warranty of any kind. Always confirm your
+              schedule and register through UCR's official portal. RSchedule is not responsible for missed
+              deadlines, full classes, registration errors, or other outcomes related to your registration.
             </p>
           </div>
           <div>
-            <h3 className="mb-1 font-medium text-primary-700">Error reports</h3>
+            <h3 className="mb-1 font-medium text-primary-700">Your data</h3>
             <p>
-              If the app crashes, an anonymous error report (the error and your browser type) may be sent to help
-              fix it. It does not include your courses, schedule, or any personal information.
+              RSchedule has no accounts and never asks for your UCR login. Your courses, hours, and busy times are
+              saved in your browser only. They're sent to our server just to build your schedule and aren't stored
+              there. Your IP address is used briefly to limit abusive traffic, and our hosting provider may keep
+              standard server logs. If the app crashes, an anonymous error report (the error and your browser type)
+              may be sent to help fix it. It doesn't include your courses or schedule.
             </p>
           </div>
           <p className="border-t border-neutral-100 pt-3 text-xs text-neutral-500">

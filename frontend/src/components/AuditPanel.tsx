@@ -20,6 +20,22 @@ interface AuditPanelProps {
   onClose: () => void;
 }
 
+// Official pages with each college's approved breadth (GE) courses. The audit
+// gives no course list for those requirements, so students look them up here.
+const GE_LISTS = [
+  { label: "Engineering", href: "https://student.engr.ucr.edu/policies/breadth-requirements" },
+  { label: "CHASS", href: "https://chassstudentaffairs.ucr.edu/breadth-requirements-course-list" },
+  { label: "CNAS", href: "https://cnasstudent.ucr.edu/sites/default/files/2022-08/cnas-breadth-sheet.pdf" },
+];
+
+// UCR's Schedule of Classes, where the breadth field can be filtered per term.
+const SEARCH_CLASSES_URL = "https://classes.ucr.edu";
+
+// Engineering's depth requirement has its own breadth tag in the Schedule of Classes.
+const isDepth = (requirement: OpenRequirement) => /\bdepth\b/i.test(`${requirement.block} ${requirement.label}`);
+
+const GE_LINK_CLASS = "font-medium text-primary-600 underline underline-offset-2 hover:text-primary-700";
+
 // "CS152" -> "CS 152", how students read course codes.
 function formatCode(code: string): string {
   return code.replace(/^([A-Z]+)/, "$1 ");
@@ -333,6 +349,23 @@ function AuditPanel({ audit, termCode, selectedCodes, onAdd, onAuditChange, load
                             <p className="text-xs font-medium text-neutral-500">{titleCase(requirement.group)}</p>
                           )}
                           <p className="text-sm text-neutral-900">{requirement.label}</p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            Approved courses:{" "}
+                            {GE_LISTS.map((list, i) => (
+                              <span key={list.href}>
+                                {i > 0 && " · "}
+                                <a href={list.href} target="_blank" rel="noopener noreferrer" className={GE_LINK_CLASS}>
+                                  {list.label}
+                                </a>
+                              </span>
+                            ))}
+                          </p>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            <a href={SEARCH_CLASSES_URL} target="_blank" rel="noopener noreferrer" className={GE_LINK_CLASS}>
+                              {isDepth(requirement) ? "Search depth classes" : "Search for classes"}
+                            </a>
+                            {isDepth(requirement) && <> (pick &ldquo;EN-ABET Depth&rdquo; in the breadth field)</>}
+                          </p>
                         </div>
                         <span className={CHIP_OPEN}>Still needed</span>
                       </div>

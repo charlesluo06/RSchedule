@@ -330,6 +330,11 @@ app.post("/generate", (req, res) => {
   });
 });
 
+// TEMPORARY: verifies Sentry end to end through the real 500 path. Remove.
+app.get("/sentry-test", (_req, res) => {
+  sendServiceError(res, new Error("Sentry backend test"), "");
+});
+
 // Must come after all routes: reports any error a route didn't handle itself,
 // then falls through to Express's default error response.
 Sentry.setupExpressErrorHandler(app);

@@ -185,12 +185,199 @@ function scheduleKey(selections: Map<string, Bundle>): string {
     .join(",");
 }
 
+const DAY_INDEX: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4 };
+
+// A bundle with its numbers worked out once up front, so the search below
+// never has to re-derive them for every one of millions of combinations.
+interface PreparedBundle {
+  bundle: Bundle;
+  meetings: Meeting[];
+  // Earliest start / latest end per weekday (Mon..Fri), in minutes; the
+  // sentinels mean "no class that day".
+  minStart: number[];
+  maxEnd: number[];
+  durationByDay: number[]; // class minutes per weekday (Mon..Fri)
+  slots: { day: number; start: number; end: number }[]; // meetings as plain numbers
+  outsideWindow: boolean; // some meeting falls outside the preferred time window
+}
+
+function prepareBundle(bundle: Bundle, pref: TimeRangePreference): PreparedBundle {
+  const prefStart = timeToMinutes(pref.startTime);
+  const prefEnd = timeToMinutes(pref.endTime);
+  const meetings = bundle.sections.flatMap((section) => section.meetings);
+  const minStart = [Infinity, Infinity, Infinity, Infinity, Infinity];
+  const maxEnd = [-Infinity, -Infinity, -Infinity, -Infinity, -Infinity];
+  const durationByDay = [0, 0, 0, 0, 0];
+  const slots: { day: number; start: number; end: number }[] = [];
+  let outsideWindow = false;
+  for (const meeting of meetings) {
+    const day = DAY_INDEX[meeting.day];
+    const start = timeToMinutes(meeting.startTime);
+    const end = timeToMinutes(meeting.endTime);
+    minStart[day] = Math.min(minStart[day], start);
+    maxEnd[day] = Math.max(maxEnd[day], end);
+    durationByDay[day] += end - start;
+    slots.push({ day, start, end });
+    if (start < prefStart || end > prefEnd) outsideWindow = true;
+  }
+  return { bundle, meetings, minStart, maxEnd, durationByDay, slots, outsideWindow };
+}
+
+/**
+ * Finds the best `maxResults` schedules for the "fewest gaps" ranking without
+ * walking every combination.
+ *
+ * In a conflict-free schedule, a day's gap time is exactly (last class end -
+ * first class start) minus the minutes actually in class, so the total gap is
+ * (sum of each day's span) - (total class minutes). Adding classes can only
+ * widen a day's span, and the most they can shrink a day's gap by is their
+ * own class minutes on that day. That gives a safe lower bound for any
+ * half-built schedule: each day's gap so far, minus the most the remaining
+ * courses could still fill in that day (never below zero). A branch whose
+ * best possible outcome can't beat the current
+ * top few is skipped, which keeps the answer identical to checking
+ * everything. Bundles are tried best-first so good schedules turn up early
+ * and the bound starts cutting quickly.
+ *
+ * Also stops at `deadline` (a performance.now() time) and reports that it did,
+ * so a huge course set returns its best-so-far instead of timing out.
+ */
+function searchBestByGap(
+  courseOrder: { courseCode: string; bundles: Bundle[] }[],
+  pref: TimeRangePreference,
+  busyMeetings: Meeting[],
+  maxResults: number,
+  deadline: number,
+): { selected: CandidateSchedule[]; truncated: boolean } {
+  const order = courseOrder.map((course) => ({
+    courseCode: course.courseCode,
+    prepared: course.bundles.map((bundle) => prepareBundle(bundle, pref)),
+  }));
+  const count = order.length;
+
+  // fillByDay[k][d] = the most gap the courses from k onward could possibly
+  // fill on weekday d (each course contributes its busiest option that day).
+  const fillByDay: number[][] = [];
+  for (let k = 0; k <= count; k++) fillByDay.push([0, 0, 0, 0, 0]);
+  for (let k = count - 1; k >= 0; k--) {
+    for (let d = 0; d < 5; d++) {
+      fillByDay[k][d] = fillByDay[k + 1][d] + Math.max(0, ...order[k].prepared.map((p) => p.durationByDay[d]));
+    }
+  }
+
+  // Total gap, and the least it could still end up as, for a partial schedule.
+  function gapOf(minS: number[], maxE: number[], durDay: number[], fill: number[] | null): number {
+    let total = 0;
+    for (let d = 0; d < 5; d++) {
+      if (maxE[d] <= minS[d]) continue;
+      const dayGap = maxE[d] - minS[d] - durDay[d];
+      total += fill ? Math.max(0, dayGap - fill[d]) : dayGap;
+    }
+    return total;
+  }
+
+  // A tighter bound, used only when the cheap one above didn't prune. Class
+  // time outside a day's current span can never shrink that day's gap (it just
+  // stretches the day), so only meetings that fall INSIDE the current span can
+  // fill gap. For each remaining course, count the most such minutes any one
+  // of its options could contribute on each day.
+  function insideFillBound(from: number, minS: number[], maxE: number[], durDay: number[]): number {
+    const fill = [0, 0, 0, 0, 0];
+    for (let c = from; c < count; c++) {
+      const best = [0, 0, 0, 0, 0];
+      for (const p of order[c].prepared) {
+        const inside = [0, 0, 0, 0, 0];
+        for (const slot of p.slots) {
+          if (slot.start >= minS[slot.day] && slot.end <= maxE[slot.day]) inside[slot.day] += slot.end - slot.start;
+        }
+        for (let d = 0; d < 5; d++) if (inside[d] > best[d]) best[d] = inside[d];
+      }
+      for (let d = 0; d < 5; d++) fill[d] += best[d];
+    }
+    return gapOf(minS, maxE, durDay, fill);
+  }
+
+  const selected: CandidateSchedule[] = [];
+  const chosen: PreparedBundle[] = new Array(count);
+  let nodes = 0;
+  let truncated = false;
+
+  // Can a schedule that ends up with (fits, at-best gap) still make the cut?
+  function cannotBeatWorst(fits: boolean, bestGap: number): boolean {
+    if (selected.length < maxResults) return false;
+    const worst = selected[selected.length - 1];
+    if (worst.fitsTimeRange !== fits) return worst.fitsTimeRange && !fits;
+    return bestGap >= worst.gapMinutes;
+  }
+
+  function recurse(k: number, placed: Meeting[], fits: boolean, minS: number[], maxE: number[], durDay: number[]): void {
+    if (truncated) return;
+    nodes += 1;
+    // Checking the clock is cheap but not free, so only look every 256 steps (and on the first).
+    if ((nodes & 255) === 1 && performance.now() > deadline) {
+      truncated = true;
+      return;
+    }
+
+    if (k === count) {
+      const gap = gapOf(minS, maxE, durDay, null);
+      if (cannotBeatWorst(fits, gap)) return;
+      const selections = new Map<string, Bundle>();
+      order.forEach((course, i) => selections.set(course.courseCode, chosen[i].bundle));
+      insertTopResult(selected, { selections, gapMinutes: gap, fitsTimeRange: fits }, maxResults, 1);
+      return;
+    }
+
+    const children: { p: PreparedBundle; minS: number[]; maxE: number[]; durDay: number[]; fits: boolean; gap: number; bound: number }[] = [];
+    for (const p of order[k].prepared) {
+      if (p.meetings.some((meeting) => placed.some((other) => meetingsOverlap(meeting, other)))) continue;
+      const nextMin = minS.slice();
+      const nextMax = maxE.slice();
+      const nextDur = durDay.slice();
+      for (let d = 0; d < 5; d++) {
+        if (p.minStart[d] < nextMin[d]) nextMin[d] = p.minStart[d];
+        if (p.maxEnd[d] > nextMax[d]) nextMax[d] = p.maxEnd[d];
+        nextDur[d] += p.durationByDay[d];
+      }
+      children.push({
+        p,
+        minS: nextMin,
+        maxE: nextMax,
+        durDay: nextDur,
+        fits: fits && !p.outsideWindow,
+        gap: gapOf(nextMin, nextMax, nextDur, null),
+        bound: gapOf(nextMin, nextMax, nextDur, fillByDay[k + 1]),
+      });
+    }
+    children.sort((a, b) => (a.fits === b.fits ? a.gap - b.gap : a.fits ? -1 : 1));
+
+    for (const child of children) {
+      if (cannotBeatWorst(child.fits, child.bound)) continue;
+      if (k + 1 < count && cannotBeatWorst(child.fits, insideFillBound(k + 1, child.minS, child.maxE, child.durDay))) continue;
+      chosen[k] = child.p;
+      recurse(k + 1, [...placed, ...child.p.meetings], child.fits, child.minS, child.maxE, child.durDay);
+    }
+  }
+
+  const empty = [Infinity, Infinity, Infinity, Infinity, Infinity];
+  const none = [-Infinity, -Infinity, -Infinity, -Infinity, -Infinity];
+  recurse(0, busyMeetings, true, empty, none, [0, 0, 0, 0, 0]);
+  return { selected, truncated };
+}
+
+// How long a single search may run before returning its best-so-far. Kept well
+// under the function's 25s limit to leave room for request handling.
+const DEFAULT_TIME_BUDGET_MS = 12_000;
+
 export type UnschedulableReason = "not-offered" | "all-full" | "busy-conflict" | "course-conflict";
 
 export interface GenerateResult {
   schedules: CandidateSchedule[];
   anyValidSchedule: boolean;
   anyFitsTimeRange: boolean;
+  // True when the search hit its time budget and stopped early, so
+  // `schedules` is the best found so far rather than a guaranteed best.
+  truncated: boolean;
   // Courses that were impossible to schedule for a reason we can pin down
   // before even running the search — as opposed to a genuine time conflict,
   // which only shows up after trying every combination.
@@ -298,7 +485,9 @@ export function generateSchedules(
   gapPreference: GapPreference = "minimize",
   busyBlocks: BusyBlock[] = [],
   maxResults = 3,
+  timeBudgetMs = DEFAULT_TIME_BUDGET_MS,
 ): GenerateResult {
+  const deadline = performance.now() + timeBudgetMs;
   const busyMeetings = busyBlocksToMeetings(busyBlocks);
 
   // Combines the old two-pass "figure out why a course is unschedulable"
@@ -325,11 +514,13 @@ export function generateSchedules(
   // point checking pairwise compatibility against a closed/self-conflicting
   // section that was already going to be filtered out) — it can only
   // shrink these lists further, never add back what's already gone. Sorted
-  // most-constrained-first AFTER pruning, so the ordering heuristic reacts
-  // to the real, post-pruning option counts rather than the pre-pruning ones.
-  const courseOrder = applyArcConsistency(preArcConsistency).sort(
-    (a, b) => a.bundles.length - b.bundles.length,
-  );
+  // AFTER pruning, so the ordering reacts to the real option counts. Biggest
+  // course first: the gap bound in searchBestByGap can only be as tight as what
+  // it knows about the courses still to come, so leaving the one with the most
+  // options (e.g. 160 PHYS 40A combinations) for last made it nearly useless —
+  // measured on real Winter 2027 sets, fewest-first hit the time budget on
+  // 5-course sets that biggest-first finishes exactly in about 3 seconds.
+  const courseOrder = applyArcConsistency(preArcConsistency).sort((a, b) => b.bundles.length - a.bundles.length);
 
   // A course that had valid options on its own can still end up with zero
   // after arc-consistency — that means every one of its sections is
@@ -342,9 +533,24 @@ export function generateSchedules(
     }
   }
 
+  // The default "fewest gaps" ranking uses the pruned search, which skips
+  // branches that can't make the top few (see searchBestByGap) instead of
+  // walking every combination.
+  if (gapPreference === "minimize") {
+    const { selected, truncated } = searchBestByGap(courseOrder, preference, busyMeetings, maxResults, deadline);
+    return {
+      schedules: selected,
+      anyValidSchedule: selected.length > 0,
+      anyFitsTimeRange: selected.some((candidate) => candidate.fitsTimeRange),
+      truncated,
+      unschedulableCourses,
+    };
+  }
+
   // gapSign of 0 (for "none") makes the gap term drop out, so schedules are
   // ordered only by whether they fit the time window.
-  const gapSign = gapPreference === "minimize" ? 1 : gapPreference === "maximize" ? -1 : 0;
+  // ("minimize" never gets here: it returned above.)
+  const gapSign = gapPreference === "maximize" ? -1 : 0;
 
   // Courses from unrelated departments (e.g. gen-ed electives) can turn out
   // to have almost no real time conflicts at all, in which case the search
@@ -392,6 +598,7 @@ export function generateSchedules(
     schedules: selected,
     anyValidSchedule,
     anyFitsTimeRange,
+    truncated: false,
     unschedulableCourses,
   };
 }

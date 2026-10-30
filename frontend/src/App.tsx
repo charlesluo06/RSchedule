@@ -380,21 +380,22 @@ function App() {
     : refreshCooldown > 0
       ? `Updated · ${refreshCooldown}s`
       : "↻ Refresh seats";
-  // The degree audit is hidden on phones (below the sm breakpoint): the
-  // requirements list is too much for a small screen.
+  // On phones the requirements list is a floating card that would cover the
+  // schedule, so it doesn't auto-open after Generate there (see handleGenerate);
+  // this button opens it on demand.
   // Gold like the primary actions so the degree audit stands out next to the
   // gray Schedule / Refresh buttons. Shared by the mobile row and the sticky bar.
-  const auditButton = (
+  const renderAuditButton = (compact = false) => (
     <button
       type="button"
       onClick={() => setAuditPanelOpen((open) => !open)}
-      className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-accent-500 px-3 py-1.5 text-sm
-                 font-semibold text-primary-900 transition-colors hover:bg-accent-600"
+      className={`inline-flex cursor-pointer items-center rounded-lg bg-accent-500 py-1.5 font-semibold text-primary-900
+                 transition-colors hover:bg-accent-600 ${compact ? "gap-1 px-2 text-xs" : "gap-1.5 px-3 text-sm"}`}
     >
       {/* Same arrow-and-tray look as the download icon, pointing up. */}
       <svg
         viewBox="0 0 24 24"
-        className="h-4 w-4"
+        className={compact ? "h-3.5 w-3.5" : "h-4 w-4"}
         fill="none"
         stroke="currentColor"
         strokeWidth="1.75"
@@ -495,7 +496,7 @@ function App() {
 
           <div className="mt-4">
             <CourseChipInput courseCodes={courseCodes} termCode={selectedTermCode} onChange={setCourseCodes} />
-            <div className="mt-2 hidden flex-wrap items-center gap-x-3 gap-y-1 sm:flex">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               {audit ? (
                 <>
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800">
@@ -512,7 +513,7 @@ function App() {
                 </>
               ) : (
                 <>
-                  {auditButton}
+                  {renderAuditButton()}
                   <span className="text-xs text-neutral-500 italic">Optional: see the classes you still need</span>
                 </>
               )}
@@ -620,27 +621,30 @@ function App() {
             {/* Refresh seats + Schedule (download), on their own row, mobile
                 only — desktop shows this same pair together in the sticky
                 ScheduleStats bar instead (see the sm:flex group below). */}
-            <div className="flex items-center gap-3 sm:hidden">
+            <div className="flex flex-wrap items-center gap-2 sm:hidden">
               <button
                 type="button"
                 onClick={handleRefreshSeats}
                 disabled={generateLoading || refreshCooldown > 0}
-                className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-medium
+                className="cursor-pointer rounded-lg border border-neutral-300 px-2 py-1.5 text-xs font-medium
                            text-neutral-700 transition-colors hover:bg-neutral-100
                            disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {refreshLabel}
               </button>
+              {/* Right after Refresh so the two always share a row; if the row
+                  has to wrap on a narrow phone, Schedule is the one that drops. */}
+              {renderAuditButton(true)}
               {showCalendar && activeSchedule && (
                 <button
                   type="button"
                   onClick={handleDownloadSchedule}
                   disabled={downloadingSchedule}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-300
-                             px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-neutral-300
+                             px-2 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100
                              disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <img src="/download.svg" alt="" className="h-4 w-4" />
+                  <img src="/download.svg" alt="" className="h-3.5 w-3.5" />
                   {downloadingSchedule ? "Downloading…" : "Schedule"}
                 </button>
               )}
@@ -710,7 +714,7 @@ function App() {
                     >
                       {refreshLabel}
                     </button>
-                    {auditButton}
+                    {renderAuditButton()}
                   </div>
                 </div>
               </div>

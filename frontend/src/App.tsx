@@ -61,9 +61,9 @@ function isBusyBlockArray(v: unknown): v is BusyBlock[] {
 }
 
 const PITCH_FEATURES = [
-  "Live seat counts pulled straight from UCR",
-  "Zero overlapping classes, guaranteed",
-  "Ranked by fewest gaps between classes",
+  "Live seat counts",
+  "Zero overlapping classes",
+  "Fewest gaps between classes",
 ];
 
 function CheckIcon() {
@@ -457,8 +457,8 @@ function App() {
                   <span className="text-accent-500">R</span>
                   <span className="text-primary-700">Schedule</span>
                 </h1>
-                <p className="mt-3 text-lg text-neutral-600">
-                  Build a conflict-free UCR schedule in seconds.
+                <p className="mt-3 text-[clamp(0.85rem,4.2vw,1.25rem)] whitespace-nowrap text-neutral-700 sm:text-xl">
+                  Your optimal UCR schedule, in seconds.
                 </p>
               </div>
 

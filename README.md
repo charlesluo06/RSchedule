@@ -85,7 +85,7 @@ CI runs type-checks, tests, and builds for both projects on every pull request t
 
 Both projects deploy to Vercel from `main` as separate projects:
 
-- **Backend:** the Express app is exported as a serverless function (`backend/api/index.ts`) with a 20-second max duration.
+- **Backend:** the Express app is exported as a serverless function (`backend/api/index.ts`) with a 25-second max duration.
 - **Frontend:** a static Vite build; set `VITE_API_BASE_URL` to the backend's URL.
 
 Scheduled GitHub Actions keep things fast:
@@ -95,7 +95,7 @@ Scheduled GitHub Actions keep things fast:
 
 ## Limits and design choices
 
-- Schedules are limited to **6 courses**, because each uncached course is a serialized live UCR search.
+- Schedules are limited to **5 courses**, because each uncached course is a serialized live UCR search.
 - The API is rate limited per IP (default 600/min). If Redis is unavailable, the limiter and cache fail open so the app keeps working, just more slowly and with more load on UCR.
 - Seat counts are intentionally cached for only 3 minutes so they stay close to live.
 

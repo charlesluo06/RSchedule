@@ -134,7 +134,7 @@ app.get("/course-codes", async (req, res) => {
 // ucrClient.ts), so every extra course adds a serialized live search on a
 // cache miss. 6 matches the frontend's own per-schedule limit and keeps a
 // single request from tying up the queue for everyone else.
-export const MAX_COURSES_PER_REQUEST = 6;
+export const MAX_COURSES_PER_REQUEST = 5;
 const MAX_COURSE_CODE_LENGTH = 12;
 
 export function validateCourseCodes(input: unknown): { ok: true } | { ok: false; error: string } {
